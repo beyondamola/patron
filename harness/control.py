@@ -37,6 +37,31 @@ class ControlRequest:
             raise ValueError("Request timestamp must include a timezone")
 
 
+def validate_control_envelope(results: dict, outbox: dict, state_path: Path) -> None:
+    for request_id, entry in results.items():
+        try:
+            request = ControlRequest(**entry["request"])
+            request.validate()
+            result = entry["result"]
+            if request.request_id != request_id or result["request_id"] != request_id:
+                raise ValueError("Control result ID mismatch")
+            if result["status"] not in {"APPLIED", "REJECTED"}:
+                raise ValueError("Invalid durable control result status")
+            for key in ("incident_id", "operation", "reason", "actor"):
+                if result.get(key) != getattr(request, key):
+                    raise ValueError("Control request/result mismatch")
+        except (TypeError, KeyError, AttributeError) as exc:
+            raise ValueError("Malformed durable control result") from exc
+    for request_id, event in outbox.items():
+        if not isinstance(event, dict) or request_id not in results:
+            raise ValueError("Audit outbox has no matching durable result")
+        if (event.get("schema_version") != 1 or event.get("event") != "operator_control"
+                or event.get("event_id") != request_id or event.get("state_path") != str(state_path)
+                or event.get("request") != results[request_id]["request"]
+                or event.get("result") != results[request_id]["result"]):
+            raise ValueError("Invalid audit outbox event")
+
+
 def audit_records(path: Path):
     if not path.exists():
         return
@@ -82,7 +107,8 @@ class IncidentControl:
         for incident in records.values():
             current = self.registry.incidents.get(incident.get("resource"))
             incident["suppressed"] = bool(current and current.incident_id == incident["incident_id"]
-                and current.status in {ESCALATED, FAILED} and not current.rearmed)
+                and current.status in {ESCALATED, FAILED} and not current.rearmed
+                and self.registry.matches_generation(current))
             incident["evidence_path"] = str(self.audit.path.resolve())
         return records
 
@@ -105,7 +131,8 @@ class IncidentControl:
         with StateLock(self.inbox / "queue").acquire():
             path = self.inbox / f"{request.request_id}.json"
             if path.exists():
-                if json.loads(path.read_text()) != asdict(request):
+                existing = json.loads(path.read_text())
+                if any(existing.get(key) != getattr(request, key) for key in ("incident_id", "operation", "reason", "actor")):
                     raise StateConflict("Request ID already has different contents")
             else:
                 atomic_json(path, asdict(request))
@@ -141,7 +168,7 @@ class IncidentControl:
             error = "Incident not found"
         elif request.operation == "rearm":
             current = self.registry.incidents.get(incident["resource"])
-            if not current or current.incident_id != request.incident_id or current.status not in {ESCALATED, FAILED} or current.rearmed:
+            if not current or current.incident_id != request.incident_id or current.status not in {ESCALATED, FAILED} or current.rearmed or not self.registry.matches_generation(current):
                 error = "Only the currently suppressed ESCALATED or FAILED incident can be rearmed"
         if error:
             result.update(status="REJECTED", error=error)
@@ -154,7 +181,9 @@ class IncidentControl:
                     current.acknowledgment = metadata
             else:
                 current.rearmed = True
-                self.registry.resolved_at.pop(current.resource, None)
+                if self.registry.resolved_generations.get(current.resource) in {None, current.container_id}:
+                    self.registry.resolved_at.pop(current.resource, None)
+                    self.registry.resolved_generations.pop(current.resource, None)
                 incident = current.to_dict()
         if dry_run:
             return {**result, "status": "DRY_RUN" if not error else "REJECTED"}
@@ -167,6 +196,11 @@ class IncidentControl:
         return result
 
     def flush(self):
+        with self.registry.lock.acquire():
+            self.registry.check_revision()
+            self._flush_owned()
+
+    def _flush_owned(self):
         for request_id, event in list(self.registry.outbox.items()):
             already_logged = any(record.get("event_id") == request_id and record.get("state_path") == str(self.registry.state_path) for record in audit_records(self.audit.path))
             if not already_logged:
@@ -182,6 +216,11 @@ class IncidentControl:
         self.registry.persist()
 
     def process_pending(self):
+        with self.registry.lock.acquire():
+            self.registry.check_revision()
+            self._process_pending_owned()
+
+    def _process_pending_owned(self):
         self.flush() if self.registry.outbox else None
         if not self.inbox.exists():
             return
@@ -215,7 +254,7 @@ def execute_request(registry, operation, incident_id, reason, actor, request_id=
             return control.request_result(request.request_id)
         return existing
     if dry_run:
-        return control.apply(request, dry_run=True)
+        return control._apply_owned(request, dry_run=True)
     control.submit(request)
     deadline = time.monotonic() + timeout
     while True:

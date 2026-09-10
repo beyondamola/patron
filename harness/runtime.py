@@ -75,6 +75,13 @@ class PatronRuntime:
         if not snapshot.exists:
             stage("Collector", f"Cannot observe {snapshot.name}: {snapshot.status}", True)
             return {"triggered": False, "error": snapshot.status, "snapshot_status": snapshot.status}
+        if self.registry.observe_generation(snapshot.name, snapshot.container_id):
+            previous = self.registry.incidents.get(snapshot.name)
+            if previous and not self.registry.matches_generation(previous) and previous.status not in {RESOLVED, ESCALATED, FAILED}:
+                self.registry.mark_final(previous, FAILED)
+                self.audit_logger.log(self._audit_record(previous,
+                    {"reason": "container generation replaced before recovery"}, None, None, None, None))
+            self.registry.persist()
         stage(
             "Collector",
             (

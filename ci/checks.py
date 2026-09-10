@@ -28,12 +28,12 @@ def prepare(destination: Path) -> None:
             raise DockerError(f"Image pre-pull failed for {image}: {result.stderr}")
 
 
-def validate_report(path: Path) -> None:
+def validate_report(path: Path, expected: set[str] | None = None) -> None:
     cases = ET.parse(path).getroot().findall(".//testcase")
-    expected = {f"test_real_scenario[{name}]" for name in default_registry().names()}
+    expected = expected or {f"test_real_scenario[{name}]" for name in default_registry().names()}
     names = [case.get("name") for case in cases]
     if len(cases) != len(expected) or set(names) != expected:
-        raise ValueError(f"Expected exactly these eight scenarios: {sorted(expected)}; got {names}")
+        raise ValueError(f"Expected exactly these cases: {sorted(expected)}; got {names}")
     if any(case.find(tag) is not None for case in cases for tag in ("failure", "error", "skipped")):
         raise ValueError("Integration report contains failures, errors, or skips")
 
@@ -85,13 +85,15 @@ def collect_artifacts(destination: Path) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("operation", choices=("prepare", "validate", "cleanup", "artifacts"))
+    parser.add_argument("operation", choices=("prepare", "validate", "validate-operator", "cleanup", "artifacts"))
     parser.add_argument("--path", type=Path, default=Path("artifacts/raw"))
     args = parser.parse_args()
     if args.operation == "prepare":
         prepare(args.path)
     elif args.operation == "validate":
         validate_report(args.path)
+    elif args.operation == "validate-operator":
+        validate_report(args.path, {"test_real_operator_workflow"})
     elif args.operation == "cleanup":
         cleanup(os.environ.get("PATRON_CI_RUN_ID", ""))
     else:

@@ -9,7 +9,7 @@ No gate is complete solely because its local tests pass.
 | --- | --- | --- |
 | G0 | Verified | Unit baseline: 56 passed, 8 skipped. Real Docker suite: 8 passed, 56 deselected, 48.71 seconds. Normal CLI baseline: all eight PASSED; no simulation containers/networks remained. Checkpoint 8b1ca31. |
 | G1 | Verified | Commit 557f88f passed three independent full workflows on Linux amd64/arm64. See G1_VERIFICATION.md. |
-| G2 | In progress | Versioned state, ownership, operator inbox/CLI, idempotent results, and audit outbox implemented. Generation semantics and real-process qualification still pending. |
+| G2 | In progress | Generation-scoped state, operator inbox/CLI, live/offline real-process test implemented. Full regression/CI qualification in progress. |
 | G3 | Not started | Sustained detection and false-positive corpus pending. |
 | G4 | Not started | Capture/replay and fake shadow comparison pending. |
 | G5 | Not started | Full qualification pending. |
@@ -130,3 +130,19 @@ and create a linked new incident only if a later collection still detects failur
 - Still required before G2 completion: generation-aware suppression/rearm review,
   real live/offline process workflows, broader concurrent request/crash tests,
   state control-envelope validation, docs review, and full G2 CI qualification.
+
+## G2 qualification follow-up
+
+- Added observed/resolved generation identity, generation-scoped cooldown, and
+  replacement handling. Unknown legacy identity retains conservative suppression.
+- Fixed live dry-run requiring a writer lock and duplicate pending submission
+  comparing regenerated timestamps instead of immutable operator intent.
+- Validated durable request/result and audit-outbox envelopes on load; malformed
+  control state fails closed. process_pending/flush hold state ownership explicitly.
+- Unit suite reached 110 passed, 9 integration cases skipped by default.
+- Real operator process test passed locally in 9.44 seconds: live acknowledgment,
+  live rearm, offline rearm, linked incidents, duplicate request result, writer
+  exclusion, graceful shutdown, and owned container cleanup. Concurrent CLI
+  submissions were subsequently added and remain to be run with final qualification.
+- CI now runs a separate exact-case operator report alongside the unchanged
+  eight-scenario integration report; unit lanes deselect both integration markers.

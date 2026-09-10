@@ -6,7 +6,7 @@ import pytest
 
 @pytest.fixture(autouse=True)
 def unit_io_boundary(request, monkeypatch):
-    if request.node.get_closest_marker("integration"):
+    if request.node.get_closest_marker("integration") or request.node.get_closest_marker("operator_integration"):
         return
 
     def forbidden(*args, **kwargs):

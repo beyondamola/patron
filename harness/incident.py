@@ -88,6 +88,18 @@ class Incident:
         for value in (incident.created_at, incident.updated_at):
             if parse_time(value).tzinfo is None:
                 raise ValueError("Incident timestamps must include a timezone")
+        if type(incident.rearmed) is not bool:
+            raise ValueError("Incident rearmed flag must be boolean")
+        for value in (incident.container_id, incident.predecessor_id):
+            if value is not None and (not isinstance(value, str) or not value):
+                raise ValueError("Optional incident identities must be nonempty strings")
+        if incident.acknowledgment is not None:
+            if not isinstance(incident.acknowledgment, dict) or any(
+                    not isinstance(incident.acknowledgment.get(key), str) or not incident.acknowledgment[key]
+                    for key in ("actor", "reason", "timestamp")):
+                raise ValueError("Malformed incident acknowledgment")
+            if parse_time(incident.acknowledgment["timestamp"]).tzinfo is None:
+                raise ValueError("Acknowledgment timestamp must include a timezone")
         return incident
 
 
@@ -107,6 +119,8 @@ class IncidentRegistry:
         self.control_results: dict[str, Any] = {}
         self.outbox: dict[str, Any] = {}
         self.audit_path: str | None = None
+        self.observed_generations: dict[str, str] = {}
+        self.resolved_generations: dict[str, str | None] = {}
         self.load()
 
     def load(self) -> None:
@@ -142,6 +156,15 @@ class IncidentRegistry:
                 raise ValueError(f"State {field} must be an object")
             setattr(self, field, value)
         self.audit_path = payload.get("audit_path")
+        if self.audit_path is not None and not isinstance(self.audit_path, str):
+            raise ValueError("State audit_path must be a string")
+        for field in ("observed_generations", "resolved_generations"):
+            value = payload.get(field, {})
+            if not isinstance(value, dict) or any(not isinstance(key, str) or (item is not None and not isinstance(item, str)) for key, item in value.items()):
+                raise ValueError(f"Invalid {field}")
+            setattr(self, field, value)
+        from .control import validate_control_envelope
+        validate_control_envelope(self.control_results, self.outbox, self.state_path)
 
     def check_revision(self) -> None:
         if self.state_path.exists():
@@ -182,18 +205,34 @@ class IncidentRegistry:
             "control_results": self.control_results,
             "outbox": self.outbox,
             "audit_path": self.audit_path,
+            "observed_generations": self.observed_generations,
+            "resolved_generations": self.resolved_generations,
         }
         atomic_json(self.state_path, payload)
         self.revision += 1
         self._legacy = False
 
+    def matches_generation(self, incident: Incident, container_id: str | None = None) -> bool:
+        observed = container_id or self.observed_generations.get(incident.resource)
+        return not (incident.container_id and observed and incident.container_id != observed)
+
+    def observe_generation(self, resource: str, container_id: str | None) -> bool:
+        if container_id and self.observed_generations.get(resource) != container_id:
+            self.observed_generations[resource] = container_id
+            return True
+        return False
+
     def active_for(self, resource: str) -> Incident | None:
         incident = self.incidents.get(resource)
-        if incident and incident.status not in FINAL_STATUSES:
+        if incident and incident.status not in FINAL_STATUSES and self.matches_generation(incident):
             return incident
         return None
 
-    def in_cooldown(self, resource: str) -> bool:
+    def in_cooldown(self, resource: str, container_id: str | None = None) -> bool:
+        observed = container_id or self.observed_generations.get(resource)
+        resolved_id = self.resolved_generations.get(resource)
+        if observed and resolved_id and observed != resolved_id:
+            return False
         resolved = self.resolved_at.get(resource)
         if not resolved:
             return False
@@ -209,14 +248,18 @@ class IncidentRegistry:
         container_id: str | None = None,
     ) -> tuple[Incident | None, bool]:
         previous = self.incidents.get(resource)
+        if previous and not self.matches_generation(previous, container_id):
+            previous = None
         if previous and previous.status in {ESCALATED, FAILED} and not previous.rearmed:
             return None, False
         active = self.active_for(resource)
+        if active and not self.matches_generation(active, container_id):
+            active = None
         if active:
             active.incident_type = incident_type
             active.trigger_reason = trigger_reason
             return active, False
-        if self.in_cooldown(resource):
+        if self.in_cooldown(resource, container_id):
             return None, False
         incident = Incident.open(resource, resource_type, incident_type, trigger_reason)
         incident.container_id = container_id
@@ -229,6 +272,7 @@ class IncidentRegistry:
         incident.status = RESOLVED
         incident.touch()
         self.resolved_at[incident.resource] = incident.updated_at
+        self.resolved_generations[incident.resource] = incident.container_id
         self.incidents.pop(incident.resource, None)
 
     def mark_final(self, incident: Incident, status: str) -> None:
@@ -236,4 +280,5 @@ class IncidentRegistry:
         incident.touch()
         if status == ESCALATED:
             self.resolved_at[incident.resource] = incident.updated_at
+            self.resolved_generations[incident.resource] = incident.container_id
         self.incidents[incident.resource] = incident

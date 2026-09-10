@@ -186,3 +186,74 @@ def test_incomplete_audit_is_preserved_not_appended(tmp_path):
     with pytest.raises(ValueError, match="incomplete"):
         audit.log({"event": "test"})
     assert audit.path.read_text() == '{"partial":'
+
+
+def test_live_dry_run_does_not_need_writer_lock(tmp_path):
+    registry, incident, control = setup(tmp_path)
+    with registry.lock.acquire():
+        other = IncidentRegistry(registry.state_path)
+        assert execute_request(other, "rearm", incident.incident_id, "test", "actor", dry_run=True)["status"] == "DRY_RUN"
+        assert not control.inbox.exists()
+    assert not incident.rearmed
+
+
+def test_resubmit_pending_request_is_idempotent(tmp_path):
+    registry, incident, control = setup(tmp_path)
+    request_id = str(uuid4())
+    with registry.lock.acquire():
+        for _ in range(2):
+            other = IncidentRegistry(registry.state_path)
+            assert execute_request(other, "rearm", incident.incident_id, "test", "actor", request_id, timeout=0)["status"] == "PENDING"
+        assert len(list(control.inbox.glob("*.json"))) == 1
+        control.process_pending()
+    assert len(control.audit.path.read_text().splitlines()) == 1
+
+
+def test_old_generation_does_not_suppress_replacement(tmp_path):
+    registry, incident, control = setup(tmp_path)
+    registry.observe_generation("x", "generation-2")
+    assert not control.incidents()[incident.incident_id]["suppressed"]
+    assert control.apply(request(registry, incident, "rearm"))["status"] == "REJECTED"
+    new, created = registry.get_or_open("x", "docker_container", "CONTAINER_HIGH_CPU", "load", container_id="generation-2")
+    assert created and new.incident_id != incident.incident_id and new.predecessor_id is None
+
+
+def test_unknown_legacy_generation_keeps_suppression(tmp_path):
+    registry, incident, control = setup(tmp_path)
+    incident.container_id = None
+    registry.observe_generation("x", "generation-2")
+    assert registry.get_or_open("x", "docker_container", "CONTAINER_HIGH_CPU", "load", container_id="generation-2") == (None, False)
+
+
+def test_new_generation_does_not_inherit_resolved_cooldown(tmp_path):
+    registry, incident, control = setup(tmp_path)
+    registry.mark_resolved(incident)
+    assert registry.in_cooldown("x", "generation-1")
+    assert not registry.in_cooldown("x", "generation-2")
+
+
+@pytest.mark.parametrize("field,value", [("control_results", {"bad": {}}),
+    ("outbox", {"bad": {"event": "operator_control"}}), ("audit_path", 123),
+    ("observed_generations", {"x": []})])
+def test_corrupt_control_state_fails_without_modification(tmp_path, field, value):
+    registry, incident, control = setup(tmp_path)
+    payload = json.loads(registry.state_path.read_text())
+    payload[field] = value
+    original = json.dumps(payload)
+    registry.state_path.write_text(original)
+    with pytest.raises(ValueError):
+        IncidentRegistry(registry.state_path)
+    assert registry.state_path.read_text() == original
+
+
+def test_two_queued_requests_have_explicit_durable_outcomes(tmp_path):
+    registry, incident, control = setup(tmp_path)
+    requests = [request(registry, incident) for _ in range(2)]
+    for req in requests:
+        control.submit(req)
+    control.process_pending()
+    statuses = [control.request_result(req.request_id)["status"] for req in requests]
+    assert sorted(statuses) == ["APPLIED", "REJECTED"]
+    assert not list(control.inbox.glob("*.json"))
+    reloaded = IncidentControl(IncidentRegistry(registry.state_path))
+    assert [reloaded.request_result(req.request_id)["status"] for req in requests] == statuses

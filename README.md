@@ -402,7 +402,7 @@ State writes use schema version 1 and revision checks. On first write of a legac
 state file, Patron preserves a byte-for-byte `.v0.bak` backup. Unknown/corrupt
 schemas and stale revisions fail closed. Back up state before manual maintenance
 and stop its runtime first; do not delete incident history to bypass suppression.
-Operator commands (live-process qualification is still in progress):
+Operator commands:
 
 ```bash
 python -m harness incidents list --state-path logs/incident_state.json
@@ -432,6 +432,24 @@ retried before later collection. An incomplete audit tail is preserved and block
 append rather than being silently discarded. Stop the owning runtime, preserve a
 copy of the damaged log, and repair the incomplete final record before resuming.
 Do not delete state or history to bypass this error.
+
+Suppression and resolved cooldown distinguish known Docker container IDs. A new
+container with the same name does not inherit the old generation's suppression.
+Legacy incidents without a known container ID remain suppressed until explicitly
+rearmed. Rearming an already-observed replacement's predecessor is rejected; it
+cannot release the replacement's suppression. Acknowledgment is a local operator
+label and reason, not authentication or a change in policy authority.
+
+The separate opt-in real-process qualification runs live and offline operator
+commands against a simulation-owned OOM container, including concurrent requests,
+duplicate IDs, restart persistence, and state ownership rejection:
+
+```bash
+PATRON_RUN_DOCKER_INTEGRATION=1 python -m pytest -m operator_integration
+```
+
+It is also required in both CI Docker jobs, independently of the exact eight-case
+scenario report. Default tests skip both types of integration tests.
 
 This remains a local, single-target MVP. Resource statistics are sampled once per cycle; CPU detection does not yet require sustained load. Disk inspection uses `df` inside the container (unavailable tools produce an unknown metric). `patron.disk_path` and `patron.dependency` are optional measurement hints, not ownership requirements; default disk monitoring uses `/tmp`. Log classification uses bounded recent text patterns rather than application-specific parsers. Memory usage is currently unavailable/null. Only the lab's known unhealthy startup behavior is proven to recover on restart.
 
