@@ -9,7 +9,7 @@ No gate is complete solely because its local tests pass.
 | --- | --- | --- |
 | G0 | Verified | Unit baseline: 56 passed, 8 skipped. Real Docker suite: 8 passed, 56 deselected, 48.71 seconds. Normal CLI baseline: all eight PASSED; no simulation containers/networks remained. Checkpoint 8b1ca31. |
 | G1 | Verified | Commit 557f88f passed three independent full workflows on Linux amd64/arm64. See G1_VERIFICATION.md. |
-| G2 | In progress | Generation-scoped state, operator inbox/CLI, live/offline real-process test implemented. Full regression/CI qualification in progress. |
+| G2 | Verified | Commit 6f0498c passed Linux amd64/arm64 CI including real operator processes; local 115 unit tests and eight scenarios passed. See G2_VERIFICATION.md. |
 | G3 | Not started | Sustained detection and false-positive corpus pending. |
 | G4 | Not started | Capture/replay and fake shadow comparison pending. |
 | G5 | Not started | Full qualification pending. |
@@ -43,7 +43,7 @@ No gate is complete solely because its local tests pass.
 | G0 baseline real scenarios | 8 passed in actual Docker suite | Verified locally |
 | CI-1 immutable multiarch images | scenarios/images.py; manifests and actual Linux amd64/arm64 execution; fresh virtualenv install | Verified |
 | CI-2 actual Linux CI | Runs 34498811932, 34499033848, 34499045400 succeeded independently at 557f88f | Verified |
-| OPS-1 through OPS-4 | Existing state implementation inspected | Pending |
+| OPS-1 through OPS-4 | State/control tests, real operator workflow, CI 34536159885, G2_VERIFICATION.md | Verified |
 | DET-1 through DET-5 | Current single-sample behavior documented | Pending |
 | REP-1 through REP-7 | Current audit lacks full observation stream | Pending |
 
@@ -146,3 +146,32 @@ and create a linked new incident only if a later collection still detects failur
   submissions were subsequently added and remain to be run with final qualification.
 - CI now runs a separate exact-case operator report alongside the unchanged
   eight-scenario integration report; unit lanes deselect both integration markers.
+
+## G2 failures discovered by qualification
+
+- Real concurrent CLI submissions failed because the shared nonblocking queue
+  lock rejected one producer. Diagnostic stderr identified queue.lock, not the
+  runtime state lock. Replaced queue locking with atomic no-overwrite hard-link
+  publication of individually fsynced request files. Sixteen concurrent producer
+  tests and duplicate-ID publication tests pass; real concurrent workflow passed
+  in 11.54 seconds. Commit a230518.
+- CI runs 34535483959 and 34535690136 failed operator qualification. Their normal
+  eight-scenario suites passed, but retained logs exposed a separate OOM race:
+  generic STOPPED was observed and restarted before OOMKilled became visible;
+  resource-only cooldown then suppressed the later OOM classification.
+- Added terminal-state refresh by immutable container ID after enrichment and
+  incident-type-scoped resolved cooldown. The test still requires every OOM
+  operator incident to be ESCALATED, so a hidden restart cannot make it pass.
+  Commit 6f0498c. Current unit suite: 115 passed, 9 opt-in skipped. Real operator
+  workflow: 1 passed in 11.85 seconds, artifacts/raw/g2-oom-refresh.xml.
+- Normal CLI run-all before the OOM refresh: all eight PASSED. Final refresh CI
+  run 34536159885 remains in progress; G2 is not yet marked complete.
+- Failed-run artifacts were retained under artifacts/g2-failed-amd64; no failures
+  were replaced with automatic retries or lower thresholds.
+- Final G2 CI: https://github.com/beyondamola/patron/actions/runs/34536159885
+  succeeded on commit 6f0498c. Downloaded artifacts/g2-qualified and validated
+  both exact eight-case reports plus both exact operator-process reports.
+- Final local refreshed suite: 8 passed in 51.53 seconds; no simulation containers,
+  networks, or remaining Python Patron processes were found afterward.
+- G2 is verified. G3 sustained detection/configuration/negative corpus is next;
+  G4 replay and G5 final qualification remain unimplemented.
