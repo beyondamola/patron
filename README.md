@@ -392,6 +392,18 @@ containers. Local logs are ignored by Git and are not uploaded by a local test.
 
 ## Current Boundaries
 
+Runtime state ownership: `run` and `watch` accept `--state-path`. An explicit path
+overrides `PATRON_STATE_PATH`, otherwise the default is `logs/incident_state.json`.
+Only one runtime may own a state path; a second process fails before collection.
+The `.lock` file may remain after shutdown; ownership is a kernel lock, not the
+file's presence. Do not delete or replace it while Patron is running.
+
+State writes use schema version 1 and revision checks. On first write of a legacy
+state file, Patron preserves a byte-for-byte `.v0.bak` backup. Unknown/corrupt
+schemas and stale revisions fail closed. Back up state before manual maintenance
+and stop its runtime first; do not delete incident history to bypass suppression.
+The operator acknowledgment/rearm CLI is still under implementation.
+
 This remains a local, single-target MVP. Resource statistics are sampled once per cycle; CPU detection does not yet require sustained load. Disk inspection uses `df` inside the container (unavailable tools produce an unknown metric). `patron.disk_path` and `patron.dependency` are optional measurement hints, not ownership requirements; default disk monitoring uses `/tmp`. Log classification uses bounded recent text patterns rather than application-specific parsers. Memory usage is currently unavailable/null. Only the lab's known unhealthy startup behavior is proven to recover on restart.
 
 ## Non-Goals

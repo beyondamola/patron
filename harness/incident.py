@@ -8,6 +8,8 @@ from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
+from .storage import StateConflict, StateLock, atomic_json, sync_directory
+
 
 OPEN = "OPEN"
 RUNNING = "RUNNING"
@@ -15,6 +17,7 @@ RESOLVED = "RESOLVED"
 ESCALATED = "ESCALATED"
 FAILED = "FAILED"
 FINAL_STATUSES = {RESOLVED, ESCALATED, FAILED}
+STATE_SCHEMA_VERSION = 1
 
 
 def utc_now() -> str:
@@ -38,6 +41,9 @@ class Incident:
     last_action: str | None = None
     verification_state: dict[str, Any] | None = None
     trigger_reason: str | None = None
+    container_id: str | None = None
+    predecessor_id: str | None = None
+    acknowledgment: dict[str, Any] | None = None
 
     @classmethod
     def open(
@@ -68,17 +74,32 @@ class Incident:
 
     @classmethod
     def from_dict(cls, payload: dict[str, Any]) -> "Incident":
+        payload = dict(payload)
         payload.setdefault("incident_type", "UNKNOWN")
-        return cls(**payload)
+        incident = cls(**payload)
+        if incident.status not in FINAL_STATUSES | {OPEN, RUNNING}:
+            raise ValueError(f"Unknown incident status: {incident.status}")
+        if type(incident.attempts) is not int or incident.attempts < 0:
+            raise ValueError("Incident attempts must be a nonnegative integer")
+        for field in (incident.incident_id, incident.resource, incident.resource_type, incident.incident_type):
+            if not isinstance(field, str) or not field:
+                raise ValueError("Incident identity fields must be nonempty strings")
+        for value in (incident.created_at, incident.updated_at):
+            if parse_time(value).tzinfo is None:
+                raise ValueError("Incident timestamps must include a timezone")
+        return incident
 
 
 class IncidentRegistry:
     def __init__(
         self,
-        state_path: Path | str = "logs/incident_state.json",
+        state_path: Path | str | None = None,
         cooldown_seconds: int = 60,
     ) -> None:
-        self.state_path = Path(os.environ.get("PATRON_STATE_PATH", state_path))
+        self.state_path = Path(state_path or os.environ.get("PATRON_STATE_PATH", "logs/incident_state.json")).resolve()
+        self.lock = StateLock(self.state_path)
+        self.revision = 0
+        self._legacy = False
         self.cooldown_seconds = cooldown_seconds
         self.incidents: dict[str, Incident] = {}
         self.resolved_at: dict[str, str] = {}
@@ -88,24 +109,70 @@ class IncidentRegistry:
         if not self.state_path.exists():
             return
         payload = json.loads(self.state_path.read_text(encoding="utf-8"))
-        self.incidents = {
+        if not isinstance(payload, dict):
+            raise ValueError("Incident state must be a JSON object")
+        version = payload.get("schema_version", 0)
+        if type(version) is not int or version not in (0, STATE_SCHEMA_VERSION):
+            raise ValueError(f"Unsupported incident state schema: {version}")
+        revision = payload.get("revision", 0)
+        if type(revision) is not int or revision < 0:
+            raise ValueError("State revision must be a nonnegative integer")
+        if not isinstance(payload.get("incidents"), dict) or not isinstance(payload.get("resolved_at"), dict):
+            raise ValueError("Incident state requires incidents and resolved_at objects")
+        incidents = {
             key: Incident.from_dict(value)
             for key, value in payload.get("incidents", {}).items()
         }
-        self.resolved_at = payload.get("resolved_at", {})
+        if any(key != incident.resource for key, incident in incidents.items()):
+            raise ValueError("Incident state resource keys do not match incident identities")
+        for value in payload["resolved_at"].values():
+            if parse_time(value).tzinfo is None:
+                raise ValueError("Cooldown timestamps must include a timezone")
+        self.incidents = incidents
+        self.resolved_at = payload["resolved_at"]
+        self.revision = revision
+        self._legacy = version == 0
+
+    def check_revision(self) -> None:
+        if self.state_path.exists():
+            payload = json.loads(self.state_path.read_text(encoding="utf-8"))
+            if not isinstance(payload, dict) or type(payload.get("schema_version", 0)) is not int or payload.get("schema_version", 0) not in (0, STATE_SCHEMA_VERSION):
+                raise ValueError("Invalid or unsupported incident state schema")
+            if payload.get("revision", 0) != self.revision:
+                raise StateConflict("Incident state changed; reload before continuing")
+        elif self.revision:
+            raise StateConflict("Incident state disappeared; refusing to recreate it silently")
 
     def persist(self) -> None:
-        self.state_path.parent.mkdir(parents=True, exist_ok=True)
+        with self.lock.acquire():
+            self.check_revision()
+            self._persist_owned()
+
+    def _persist_owned(self) -> None:
+        if self._legacy:
+            backup = self.state_path.with_name(self.state_path.name + ".v0.bak")
+            original = self.state_path.read_bytes()
+            if backup.exists():
+                if backup.read_bytes() != original:
+                    raise StateConflict(f"Migration backup already exists with different contents: {backup}")
+            else:
+                with backup.open("xb") as stream:
+                    stream.write(original)
+                    stream.flush()
+                    os.fsync(stream.fileno())
+                sync_directory(backup.parent)
         payload = {
+            "schema_version": STATE_SCHEMA_VERSION,
+            "revision": self.revision + 1,
             "incidents": {
                 key: incident.to_dict()
                 for key, incident in self.incidents.items()
             },
             "resolved_at": self.resolved_at,
         }
-        temporary = self.state_path.with_suffix(".tmp")
-        temporary.write_text(json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8")
-        temporary.replace(self.state_path)
+        atomic_json(self.state_path, payload)
+        self.revision += 1
+        self._legacy = False
 
     def active_for(self, resource: str) -> Incident | None:
         incident = self.incidents.get(resource)

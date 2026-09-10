@@ -9,7 +9,7 @@ No gate is complete solely because its local tests pass.
 | --- | --- | --- |
 | G0 | Verified | Unit baseline: 56 passed, 8 skipped. Real Docker suite: 8 passed, 56 deselected, 48.71 seconds. Normal CLI baseline: all eight PASSED; no simulation containers/networks remained. Checkpoint 8b1ca31. |
 | G1 | Verified | Commit 557f88f passed three independent full workflows on Linux amd64/arm64. See G1_VERIFICATION.md. |
-| G2 | Not started | Operator state/control implementation and verification pending. |
+| G2 | In progress | Versioned state, migration backups, revision conflicts, and runtime ownership lock implemented. Operator inbox/CLI and complete verification pending. |
 | G3 | Not started | Sustained detection and false-positive corpus pending. |
 | G4 | Not started | Capture/replay and fake shadow comparison pending. |
 | G5 | Not started | Full qualification pending. |
@@ -87,3 +87,24 @@ crash-consistent request/audit delivery. Existing resolved incidents are removed
 from active state, so list/show must combine state with audit history. Acknowledge
 must not change status or retries; rearm must preserve the old terminal incident
 and create a linked new incident only if a later collection still detects failure.
+
+## G2 storage foundation
+
+- Added harness/storage.py: same-directory temporary files, fsync before atomic
+  replacement, directory fsync, kernel flock ownership with nested same-owner
+  support. Stale lock-file contents do not represent ownership.
+- Registry writes schema_version=1 with monotonic revisions. Legacy files are
+  backed up byte-for-byte to .v0.bak only on the first write. Reading is not migration.
+- Unknown schemas, malformed state, stale writers, and conflicting backups fail
+  closed without deleting state. Terminal suppression survives migration.
+- run/watch acquire ownership before collection; watch retains it until shutdown.
+  A second runtime cannot inspect or execute through this state path.
+- Explicit --state-path now takes precedence over PATRON_STATE_PATH and defaults.
+- Added incident container_id/predecessor_id/acknowledgment fields as optional
+  backward-compatible data fields; generation-aware operator behavior is pending.
+- tests/test_storage.py covers ownership, stale lock files, atomic replacement
+  failure, fsync failure, backup preservation, schema rejection, path precedence,
+  and rejection before collection. Full G2 is not claimed complete.
+- Verification: 85 unit tests passed, 8 integration tests skipped by default.
+  Live Docker regression suite: 8 passed in 52.83 seconds (82 unit tests deselected
+  at invocation). Evidence: artifacts/raw/g2-storage.xml. Run-scoped cleanup passed.

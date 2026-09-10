@@ -2,9 +2,12 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 
 from .collector import DockerCollector
 from .runtime import PatronRuntime
+from .incident import IncidentRegistry
+from .storage import StateConflict
 
 
 def positive_int(value: str) -> int:
@@ -19,12 +22,14 @@ def run(
     dry_run: bool = False,
     verbose: bool = False,
     trace: bool = False,
+    state_path: str | None = None,
 ) -> int:
     result = PatronRuntime(
         container_name=container_name,
         dry_run=dry_run,
         verbose=verbose,
         trace=trace,
+        registry=IncidentRegistry(state_path),
     ).process_once()
     if not result.get("triggered"):
         if result.get("error"):
@@ -63,6 +68,7 @@ def build_parser() -> argparse.ArgumentParser:
     run_parser.add_argument("--dry-run", action="store_true")
     run_parser.add_argument("--verbose", action="store_true")
     run_parser.add_argument("--trace", action="store_true")
+    run_parser.add_argument("--state-path")
 
     watch_parser = subparsers.add_parser("watch", help="run the remediation daemon")
     watch_parser.add_argument("--container", "--target", dest="container", default="mvp-nginx")
@@ -70,6 +76,7 @@ def build_parser() -> argparse.ArgumentParser:
     watch_parser.add_argument("--dry-run", action="store_true")
     watch_parser.add_argument("--verbose", action="store_true")
     watch_parser.add_argument("--trace", action="store_true")
+    watch_parser.add_argument("--state-path")
 
     inspect_parser = subparsers.add_parser("inspect-docker", help="print normalized Docker state")
     inspect_parser.add_argument("--target", "--container", dest="container", default="mvp-nginx")
@@ -77,6 +84,14 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
+    try:
+        return _main(argv)
+    except (StateConflict, ValueError, OSError) as exc:
+        print(f"Patron error: {exc}", file=sys.stderr)
+        return 1
+
+
+def _main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     if args.command == "run":
         return run(
@@ -84,6 +99,7 @@ def main(argv: list[str] | None = None) -> int:
             dry_run=args.dry_run,
             verbose=args.verbose,
             trace=args.trace,
+            state_path=args.state_path,
         )
     if args.command == "watch":
         return PatronRuntime(
@@ -91,6 +107,7 @@ def main(argv: list[str] | None = None) -> int:
             dry_run=args.dry_run,
             verbose=args.verbose,
             trace=args.trace,
+            registry=IncidentRegistry(args.state_path),
         ).watch(interval=args.interval)
     if args.command == "inspect-docker":
         snapshot = DockerCollector(args.container).collect()

@@ -45,6 +45,11 @@ class PatronRuntime:
         self.triggers = triggers or default_trigger_registry()
 
     def process_once(self) -> dict[str, Any]:
+        with self.registry.lock.acquire():
+            self.registry.check_revision()
+            return self._process_owned()
+
+    def _process_owned(self) -> dict[str, Any]:
         try:
             return self._process_once()
         except Exception as exc:
@@ -232,6 +237,11 @@ class PatronRuntime:
         return {"triggered": True, "incident": incident.to_dict(), "audit": record}
 
     def watch(self, interval: int = 10) -> int:
+        with self.registry.lock.acquire():
+            self.registry.check_revision()
+            return self._watch_owned(interval)
+
+    def _watch_owned(self, interval: int) -> int:
         stage("Runtime", f"watching every {interval}s", True)
         shutdown_requested = False
         previous_handler = signal.getsignal(signal.SIGINT)
