@@ -2,6 +2,9 @@ from scenarios.base import InjectionResult, ObservationResult, Scenario, Scenari
 from scenarios.docker_utils import ContainerState
 from scenarios.result import INJECTION_FAILED
 from scenarios.runner import run_scenario
+import json
+from pathlib import Path
+import pytest
 
 
 class FakeDocker:
@@ -89,3 +92,22 @@ def test_runner_cleans_up_after_exception() -> None:
     run_scenario(scenario, context, writer=MemoryWriter())
 
     assert scenario.cleaned
+
+
+def test_failure_state_evidence_is_persisted(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    context = ScenarioContext("unconfirmed", "target", docker=FakeDocker(), start_patron=False)
+    run_scenario(UnconfirmedScenario(), context, MemoryWriter())
+    evidence = Path("logs/scenarios") / context.scenario_id / "post-state.json"
+    assert json.loads(evidence.read_text())["name"] == "target"
+
+
+def test_result_not_announced_before_persistence(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    class FailingWriter:
+        def write(self, result):
+            raise OSError("audit disk unavailable")
+    context = ScenarioContext("unconfirmed", "target", docker=FakeDocker(), start_patron=False, verbose=True)
+    with pytest.raises(OSError):
+        run_scenario(UnconfirmedScenario(), context, FailingWriter())
+    assert "Result:" not in capsys.readouterr().out

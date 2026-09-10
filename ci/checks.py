@@ -39,8 +39,8 @@ def validate_report(path: Path) -> None:
 
 
 def cleanup(run_id: str, client: DockerClient | None = None) -> None:
-    if not re.fullmatch(r"[A-Za-z0-9_-]{1,100}", run_id):
-        raise ValueError("A nonempty alphanumeric CI run ID is required for cleanup")
+    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,99}", run_id):
+        raise ValueError("A nonempty CI run ID containing only letters, digits, _, ., - is required")
     client = client or DockerClient()
     for kind, listing in (("container", ["ps", "-aq"]),
                           ("network", ["network", "ls", "-q"]),

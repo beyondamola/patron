@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
 from .base import InjectionResult, ObservationResult, Scenario, ScenarioContext
 from .docker_utils import DockerError, normalized_state_packet
@@ -76,6 +77,7 @@ def run_scenario(
         else:
             context.narrate("Waiting for Patron response")
             observation = scenario.observe_outcome(context, injection)
+            print_debug_state(context, "final-state", context.docker.inspect(context.target_container))
             record = find_incident_after(
                 observation.expected_incident_type or "", context.target_container,
                 injection.injected_at or context.started_at,
@@ -107,7 +109,8 @@ def run_scenario(
                 patron.stop()
             except Exception as exc:
                 status = CLEANUP_FAILED
-                error = f"Patron shutdown failed: {exc}"
+                shutdown_error = f"Patron shutdown failed: {exc}"
+                error = f"{error}; {shutdown_error}" if error else shutdown_error
         cleanup_error = None
         if not context.keep_resources:
             context.narrate("Cleaning up")
@@ -123,15 +126,18 @@ def run_scenario(
 
     result = build_result(context, status, injection, observation, error)
     result.policy_correct = policy_correct
-    context.narrate(f"Result: {result.status}")
     writer.write(result)
+    context.narrate(f"Result: {result.status}")
     return result
 
 
 def print_debug_state(context: ScenarioContext, label: str, state) -> None:
+    packet = normalized_state_packet(state)
+    evidence = Path("logs/scenarios") / context.scenario_id
+    evidence.mkdir(parents=True, exist_ok=True)
+    (evidence / f"{label}.json").write_text(json.dumps(packet, indent=2, sort_keys=True))
     if not (context.verbose or context.trace):
         return
-    packet = normalized_state_packet(state)
     context.narrate(
         f"target={packet['name']} id={packet['id']} labels={json.dumps(packet['labels'], sort_keys=True)}"
     )

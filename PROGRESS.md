@@ -42,7 +42,7 @@ No gate is complete solely because its local tests pass.
 | G0 baseline unit tests | 56 passed; 8 explicitly opt-in skipped | Verified locally |
 | G0 baseline real scenarios | 8 passed in actual Docker suite | Verified locally |
 | CI-1 immutable multiarch images | scenarios/images.py; both index manifests include Linux amd64/arm64; fresh Python 3.9 virtualenv dependency install succeeded | Local implementation verified; execution with pins pending |
-| CI-2 actual Linux CI | No workflow run yet | Missing |
+| CI-2 actual Linux CI | Run 34498459240 passed eight real scenarios on each architecture, but failed final cleanup validation | Not complete |
 | OPS-1 through OPS-4 | Existing state implementation inspected | Pending |
 | DET-1 through DET-5 | Current single-sample behavior documented | Pending |
 | REP-1 through REP-7 | Current audit lacks full observation stream | Pending |
@@ -61,3 +61,12 @@ locations as implementation advances. Historical VERIFICATION.md is not rewritte
 - Pinned GitHub action commits were resolved through the GitHub API, not guessed.
 - Approval-service interruption delayed external checks; access subsequently
   resumed. No workaround was used to bypass the rejected operation.
+- Pinned local Docker suite: 8 passed, 65 deselected, 51.56 seconds. Strict report
+  validation and run-scoped cleanup completed successfully.
+- First actual CI run: https://github.com/beyondamola/patron/actions/runs/34498459240
+  failed because the cleanup validator rejected periods in the workflow run ID.
+  Both Linux amd64/arm64 scenario suites passed; this is still a failed workflow.
+  Added an exact-format regression test, fixed validation, and retained the failure.
+- Persisted normalized pre/post/final Docker state artifacts and moved final
+  scenario narration after result persistence. Added tests for evidence and
+  result-write failure. Updated action pins after actual Node deprecation warnings.

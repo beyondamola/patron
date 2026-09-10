@@ -362,6 +362,7 @@ def normalized_state_packet(state: ContainerState) -> dict:
         "has_healthcheck": state.has_healthcheck,
         "restart_policy": state.restart_policy,
         "labels": state.labels,
+        "oom_killed": state.oom_killed,
     }
 
 
