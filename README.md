@@ -341,6 +341,9 @@ docker start patron-sim-stopped
 
 ## Tests
 
+Install the pinned test environment with `python -m pip install -r requirements-dev.txt`.
+Python 3.9 through 3.12 is the initial compatibility target; CI tests 3.9 and 3.12.
+
 Default tests are fast and mock Docker interactions where practical:
 
 ```bash
@@ -354,6 +357,38 @@ PATRON_RUN_DOCKER_INTEGRATION=1 python -m pytest -m integration
 ```
 
 These tests create all eight actual Docker environments, verify classification, policy and final status, and assert container cleanup plus graceful Patron shutdown. They are sequential and require Docker Desktop/the local Docker daemon. Default tests skip them.
+
+### Continuous Integration
+
+The private repository is `beyondamola/patron`. GitHub Actions runs separate unit
+jobs and real Docker jobs on Linux amd64 and arm64. Docker jobs explicitly enable
+strict mode: missing Docker, missing scenarios, failures, or skipped cases fail
+the job. There are no automatic retries. Image downloads have their own preflight
+timeout; each scenario has a 120-second observation timeout and the job has a
+20-minute limit.
+
+All scenarios use immutable OCI image indexes from `scenarios/images.py`. Both
+indexes were resolved from the locally verified images and inspected with
+`docker buildx imagetools inspect` on 2026-09-10:
+
+| Image | Index digest | Verified manifest platforms |
+| --- | --- | --- |
+| nginx (1.31.1) | `sha256:5aca99593157f4ae539a5dec1092a0ad8762f8e2eb1789085a13a0f5622369f6` | linux/amd64, linux/arm64 |
+| Alpine (3.20.10) | `sha256:d9e853e87e55526f6b2917df91a2115c36dd7c696a35be12163d44e6e2a4b6bc` | linux/amd64, linux/arm64 |
+
+Manifest availability does not itself prove execution on both platforms. See
+`PROGRESS.md` for actual workflow evidence. Pin updates require the full unit and
+Docker suites; do not replace digests with floating tags.
+
+CI adds `patron.ci_run_id` to all resources. Its final cleanup filters and
+rechecks that exact ID plus `patron.simulation=true`, including dependency
+containers, networks, and volumes. It never cleans another run's resources.
+Workflow artifacts retain sanitized test reports, scenario results, runtime
+output, and environment/image information for 14 days. Logs are bounded and
+common credential patterns are redacted; do not put real credentials into lab
+containers. Local logs are ignored by Git and are not uploaded by a local test.
+
+`LONG_TERM_PLAN.md` is the implementation contract; `PROGRESS.md` tracks gates.
 
 ## Current Boundaries
 

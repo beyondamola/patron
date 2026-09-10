@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import subprocess
 import time
 from dataclasses import dataclass
 from typing import Callable
+
+from .images import ALPINE, NGINX
 
 
 SIMULATION_LABEL = "patron.simulation"
@@ -151,7 +154,7 @@ class DockerClient:
         args = ["run", "-d", "--name", name]
         for key, value in labels.items():
             args.extend(["--label", f"{key}={value}"])
-        args.extend(["nginx:latest"])
+        args.extend([NGINX])
         self.run(args)
         return True
 
@@ -167,7 +170,7 @@ class DockerClient:
         args = ["run", "-d", "--name", name, "--restart", "no"]
         for key, value in labels.items():
             args.extend(["--label", f"{key}={value}"])
-        args.append("nginx:latest")
+        args.append(NGINX)
         self.run(args)
 
     def create_healthcheck_container(self, name: str, labels: dict[str, str]) -> None:
@@ -192,7 +195,7 @@ class DockerClient:
                 "1s",
                 "--health-retries",
                 "2",
-                "alpine:3.20",
+                ALPINE,
                 "sh",
                 "-c",
                 "touch /tmp/patron-health; while true; do sleep 60; done",
@@ -212,21 +215,21 @@ class DockerClient:
         args = ["run", "-d", "--name", name, "--restart", "always"]
         for key, value in labels.items():
             args.extend(["--label", f"{key}={value}"])
-        args.extend(["alpine:3.20", "sh", "-c", "sleep 1; exit 1"])
+        args.extend([ALPINE, "sh", "-c", "sleep 1; exit 1"])
         self.run(args)
 
     def create_oom_container(self, name: str, labels: dict[str, str]) -> None:
         self._remove_existing_simulation_or_fail(name)
         args = ["run", "-d", "--name", name, "--memory", "32m", "--memory-swap", "32m"]
         self._append_labels(args, labels)
-        args.extend(["alpine:3.20", "sh", "-c", "while [ ! -f /tmp/inject-oom ]; do sleep 0.1; done; exec awk 'BEGIN{s=\"x\"; while(1){s=s s}}'"])
+        args.extend([ALPINE, "sh", "-c", "while [ ! -f /tmp/inject-oom ]; do sleep 0.1; done; exec awk 'BEGIN{s=\"x\"; while(1){s=s s}}'"])
         self.run(args)
 
     def create_cpu_container(self, name: str, labels: dict[str, str]) -> None:
         self._remove_existing_simulation_or_fail(name)
         args = ["run", "-d", "--name", name, "--cpus", "1", "--memory", "64m", "--pids-limit", "32"]
         self._append_labels(args, labels)
-        args.extend(["alpine:3.20", "sh", "-c", "while true; do sleep 60; done"])
+        args.extend([ALPINE, "sh", "-c", "while true; do sleep 60; done"])
         self.run(args)
 
     def create_disk_container(self, name: str, labels: dict[str, str]) -> None:
@@ -234,7 +237,7 @@ class DockerClient:
         labels = {**labels, "patron.disk_path": "/patron-disk"}
         args = ["run", "-d", "--name", name, "--tmpfs", "/patron-disk:size=16m"]
         self._append_labels(args, labels)
-        args.extend(["alpine:3.20", "sh", "-c", "while true; do sleep 60; done"])
+        args.extend([ALPINE, "sh", "-c", "while true; do sleep 60; done"])
         self.run(args)
 
     def create_bad_config_container(self, name: str, labels: dict[str, str]) -> None:
@@ -247,7 +250,7 @@ class DockerClient:
         )
         args = ["run", "-d", "--name", name]
         self._append_labels(args, labels)
-        args.extend(["alpine:3.20", "sh", "-c", command])
+        args.extend([ALPINE, "sh", "-c", command])
         self.run(args)
 
     def create_dependency_environment(
@@ -267,7 +270,7 @@ class DockerClient:
 
         dep_args = ["run", "-d", "--name", dependency_name, "--network", network_name, "--network-alias", "dependency"]
         self._append_labels(dep_args, labels)
-        dep_args.append("nginx:latest")
+        dep_args.append(NGINX)
         self.run(dep_args)
 
         app_labels = {**labels, "patron.dependency": dependency_name}
@@ -283,7 +286,7 @@ class DockerClient:
                 "1s",
                 "--health-retries",
                 "2",
-                "alpine:3.20",
+                ALPINE,
                 "sh",
                 "-c",
                 "while true; do wget -T 1 -q -O- http://dependency:80 >/dev/null || echo DEPENDENCY_DOWN dependency unavailable; sleep 1; done",
@@ -327,12 +330,15 @@ def docker_available(client: DockerClient | None = None) -> bool:
 
 
 def simulation_labels(scenario_name: str, scenario_id: str) -> dict[str, str]:
-    return {
+    labels = {
         SIMULATION_LABEL: "true",
         SCENARIO_LABEL: scenario_name,
         SCENARIO_ID_LABEL: scenario_id,
         MANAGED_LABEL: "true",
     }
+    if os.environ.get("PATRON_CI_RUN_ID"):
+        labels["patron.ci_run_id"] = os.environ["PATRON_CI_RUN_ID"]
+    return labels
 
 
 def is_simulation_resource(state: ContainerState, scenario_id: str | None = None) -> bool:
