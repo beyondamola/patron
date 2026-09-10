@@ -8,7 +8,7 @@ No gate is complete solely because its local tests pass.
 | Gate | State | Evidence / remaining work |
 | --- | --- | --- |
 | G0 | Verified | Unit baseline: 56 passed, 8 skipped. Real Docker suite: 8 passed, 56 deselected, 48.71 seconds. Normal CLI baseline: all eight PASSED; no simulation containers/networks remained. Checkpoint 8b1ca31. |
-| G1 | In progress | Private repository created; pinned image/dependency implementation, strict report validation, cleanup and Actions workflow added. Actual workflow results pending. |
+| G1 | Verified | Commit 557f88f passed three independent full workflows on Linux amd64/arm64. See G1_VERIFICATION.md. |
 | G2 | Not started | Operator state/control implementation and verification pending. |
 | G3 | Not started | Sustained detection and false-positive corpus pending. |
 | G4 | Not started | Capture/replay and fake shadow comparison pending. |
@@ -41,8 +41,8 @@ No gate is complete solely because its local tests pass.
 | --- | --- | --- |
 | G0 baseline unit tests | 56 passed; 8 explicitly opt-in skipped | Verified locally |
 | G0 baseline real scenarios | 8 passed in actual Docker suite | Verified locally |
-| CI-1 immutable multiarch images | scenarios/images.py; both index manifests include Linux amd64/arm64; fresh Python 3.9 virtualenv dependency install succeeded | Local implementation verified; execution with pins pending |
-| CI-2 actual Linux CI | Run 34498459240 passed eight real scenarios on each architecture, but failed final cleanup validation | Not complete |
+| CI-1 immutable multiarch images | scenarios/images.py; manifests and actual Linux amd64/arm64 execution; fresh virtualenv install | Verified |
+| CI-2 actual Linux CI | Runs 34498811932, 34499033848, 34499045400 succeeded independently at 557f88f | Verified |
 | OPS-1 through OPS-4 | Existing state implementation inspected | Pending |
 | DET-1 through DET-5 | Current single-sample behavior documented | Pending |
 | REP-1 through REP-7 | Current audit lacks full observation stream | Pending |
@@ -70,3 +70,20 @@ locations as implementation advances. Historical VERIFICATION.md is not rewritte
 - Persisted normalized pre/post/final Docker state artifacts and moved final
   scenario narration after result persistence. Added tests for evidence and
   result-write failure. Updated action pins after actual Node deprecation warnings.
+- Final G1 unit suite: 70 passed, 8 skipped. Normal CLI run-all: all eight PASSED.
+- Strict missing-Docker experiment: 8 setup errors, exit 1, zero skips as required.
+- Three independent full CI successes: 34498811932, 34499033848, 34499045400.
+  All use commit 557f88f; the latter two were separate dispatches, not retries.
+- Downloaded successful run artifacts under artifacts/ci-qualification-1 and
+  validated both eight-case XML reports, 16 correct results, and 48 state packets.
+- Local post-run checks found no simulation containers/networks or remaining
+  Python harness/scenario processes. No unrelated resources were removed.
+
+## Next gate
+
+G2 implementation is next: versioned incident state and container identity,
+single-writer ownership, atomic operator request inbox, live/offline CLI, and
+crash-consistent request/audit delivery. Existing resolved incidents are removed
+from active state, so list/show must combine state with audit history. Acknowledge
+must not change status or retries; rearm must preserve the old terminal incident
+and create a linked new incident only if a later collection still detects failure.
