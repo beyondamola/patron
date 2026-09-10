@@ -3,17 +3,27 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+import getpass
+import math
 
 from .collector import DockerCollector
 from .runtime import PatronRuntime
 from .incident import IncidentRegistry
 from .storage import StateConflict
+from .control import IncidentControl, execute_request
 
 
 def positive_int(value: str) -> int:
     result = int(value)
     if result <= 0:
         raise argparse.ArgumentTypeError("must be greater than zero")
+    return result
+
+
+def bounded_wait(value: str) -> float:
+    result = float(value)
+    if not math.isfinite(result) or result < 0 or result > 300:
+        raise argparse.ArgumentTypeError("wait must be between 0 and 300 seconds")
     return result
 
 
@@ -80,6 +90,22 @@ def build_parser() -> argparse.ArgumentParser:
 
     inspect_parser = subparsers.add_parser("inspect-docker", help="print normalized Docker state")
     inspect_parser.add_argument("--target", "--container", dest="container", default="mvp-nginx")
+    incident_parser = subparsers.add_parser("incidents", help="inspect and control incident suppression")
+    commands = incident_parser.add_subparsers(dest="incident_command", required=True)
+    for name in ("list", "show", "acknowledge", "rearm"):
+        command = commands.add_parser(name)
+        command.add_argument("--state-path")
+        command.add_argument("--json", action="store_true")
+        if name != "list":
+            command.add_argument("incident_id")
+        if name == "show":
+            command.add_argument("--request-id", help="also show a queued/completed request")
+        if name in {"acknowledge", "rearm"}:
+            command.add_argument("--reason", required=True)
+            command.add_argument("--actor", default=getpass.getuser())
+            command.add_argument("--request-id")
+            command.add_argument("--dry-run", action="store_true")
+            command.add_argument("--wait", type=bounded_wait, default=5.0)
     return parser
 
 
@@ -93,6 +119,24 @@ def main(argv: list[str] | None = None) -> int:
 
 def _main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
+    if args.command == "incidents":
+        registry = IncidentRegistry(args.state_path)
+        control = IncidentControl(registry)
+        if args.incident_command == "list":
+            payload = {"incidents": list(control.incidents().values())}
+        elif args.incident_command == "show":
+            incident = control.incidents().get(args.incident_id)
+            if not incident:
+                raise ValueError("Incident not found in the selected state/audit history")
+            payload = {"incident": incident}
+            if args.request_id:
+                payload["request"] = control.request_result(args.request_id) or {"request_id": args.request_id, "status": "PENDING_OR_UNKNOWN"}
+        else:
+            payload = execute_request(registry, args.incident_command, args.incident_id,
+                args.reason, args.actor, args.request_id, args.dry_run, args.wait)
+        payload["state_path"] = str(registry.state_path)
+        print(json.dumps(payload, indent=None if args.json else 2, sort_keys=True))
+        return 0 if payload.get("status") not in {"REJECTED", "PENDING", "PENDING_AUDIT"} else 1
     if args.command == "run":
         return run(
             container_name=args.container,

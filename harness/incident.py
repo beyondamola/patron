@@ -44,6 +44,7 @@ class Incident:
     container_id: str | None = None
     predecessor_id: str | None = None
     acknowledgment: dict[str, Any] | None = None
+    rearmed: bool = False
 
     @classmethod
     def open(
@@ -103,6 +104,9 @@ class IncidentRegistry:
         self.cooldown_seconds = cooldown_seconds
         self.incidents: dict[str, Incident] = {}
         self.resolved_at: dict[str, str] = {}
+        self.control_results: dict[str, Any] = {}
+        self.outbox: dict[str, Any] = {}
+        self.audit_path: str | None = None
         self.load()
 
     def load(self) -> None:
@@ -132,6 +136,12 @@ class IncidentRegistry:
         self.resolved_at = payload["resolved_at"]
         self.revision = revision
         self._legacy = version == 0
+        for field in ("control_results", "outbox"):
+            value = payload.get(field, {})
+            if not isinstance(value, dict):
+                raise ValueError(f"State {field} must be an object")
+            setattr(self, field, value)
+        self.audit_path = payload.get("audit_path")
 
     def check_revision(self) -> None:
         if self.state_path.exists():
@@ -169,6 +179,9 @@ class IncidentRegistry:
                 for key, incident in self.incidents.items()
             },
             "resolved_at": self.resolved_at,
+            "control_results": self.control_results,
+            "outbox": self.outbox,
+            "audit_path": self.audit_path,
         }
         atomic_json(self.state_path, payload)
         self.revision += 1
@@ -193,9 +206,10 @@ class IncidentRegistry:
         resource_type: str,
         incident_type: str,
         trigger_reason: str,
+        container_id: str | None = None,
     ) -> tuple[Incident | None, bool]:
         previous = self.incidents.get(resource)
-        if previous and previous.status in {ESCALATED, FAILED}:
+        if previous and previous.status in {ESCALATED, FAILED} and not previous.rearmed:
             return None, False
         active = self.active_for(resource)
         if active:
@@ -205,6 +219,9 @@ class IncidentRegistry:
         if self.in_cooldown(resource):
             return None, False
         incident = Incident.open(resource, resource_type, incident_type, trigger_reason)
+        incident.container_id = container_id
+        if previous and previous.rearmed:
+            incident.predecessor_id = previous.incident_id
         self.incidents[resource] = incident
         return incident, True
 

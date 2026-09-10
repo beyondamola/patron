@@ -402,7 +402,36 @@ State writes use schema version 1 and revision checks. On first write of a legac
 state file, Patron preserves a byte-for-byte `.v0.bak` backup. Unknown/corrupt
 schemas and stale revisions fail closed. Back up state before manual maintenance
 and stop its runtime first; do not delete incident history to bypass suppression.
-The operator acknowledgment/rearm CLI is still under implementation.
+Operator commands (live-process qualification is still in progress):
+
+```bash
+python -m harness incidents list --state-path logs/incident_state.json
+python -m harness incidents show INCIDENT_ID --json
+python -m harness incidents acknowledge INCIDENT_ID --reason "Investigating"
+python -m harness incidents rearm INCIDENT_ID --reason "Cause corrected" --dry-run
+python -m harness incidents rearm INCIDENT_ID --reason "Cause corrected"
+```
+
+All commands accept `--state-path` and `--json`. Mutations also accept `--actor`,
+`--request-id`, `--dry-run`, and `--wait` (0-300 seconds, default 5). Acknowledge
+adds metadata without changing status or attempts. Rearm only releases the current
+ESCALATED/FAILED incident's suppression; it does not restart Docker. A subsequent
+failure creates a new linked incident. A healthy cycle creates nothing.
+
+A live runtime processes atomic requests in `<state-path>.requests` between
+cycles. Offline commands take the same state lock and apply the same validation.
+Pending and pending-audit responses exit nonzero; they do not mean success.
+Inspect a request with `incidents show INCIDENT_ID --request-id REQUEST_ID`.
+Reuse the same request ID and operation to retrieve its result without applying
+it twice. A stale state revision is rejected and requires a new request after
+inspection. Keep request IDs with operator records.
+
+Operator changes and pending audit events are committed together. If audit logging
+fails, no new automated action is allowed through that cycle; pending delivery is
+retried before later collection. An incomplete audit tail is preserved and blocks
+append rather than being silently discarded. Stop the owning runtime, preserve a
+copy of the damaged log, and repair the incomplete final record before resuming.
+Do not delete state or history to bypass this error.
 
 This remains a local, single-target MVP. Resource statistics are sampled once per cycle; CPU detection does not yet require sustained load. Disk inspection uses `df` inside the container (unavailable tools produce an unknown metric). `patron.disk_path` and `patron.dependency` are optional measurement hints, not ownership requirements; default disk monitoring uses `/tmp`. Log classification uses bounded recent text patterns rather than application-specific parsers. Memory usage is currently unavailable/null. Only the lab's known unhealthy startup behavior is proven to recover on restart.
 

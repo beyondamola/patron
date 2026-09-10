@@ -7,6 +7,7 @@ from typing import Any
 from .audit import AuditLogger
 from .collector import Collector, DockerCollector
 from .context_manager import build_context
+from .control import IncidentControl
 from .executor import DockerExecutor
 from .incident import ESCALATED, FAILED, OPEN, RESOLVED, RUNNING, Incident, IncidentRegistry
 from .observability import stage, trace_packet
@@ -38,7 +39,8 @@ class PatronRuntime:
         self.trace = trace
         self.collector = collector or DockerCollector(container_name)
         self.registry = registry or IncidentRegistry()
-        self.audit_logger = audit_logger or AuditLogger()
+        self.audit_logger = audit_logger or AuditLogger(self.registry.audit_path or "logs/incidents.jsonl")
+        self.registry.audit_path = str(self.audit_logger.path.resolve())
         self.planner = RulePlanner()
         self.executor = DockerExecutor()
         self.verifier = verifier
@@ -47,6 +49,7 @@ class PatronRuntime:
     def process_once(self) -> dict[str, Any]:
         with self.registry.lock.acquire():
             self.registry.check_revision()
+            IncidentControl(self.registry, self.audit_logger).process_pending()
             return self._process_owned()
 
     def _process_owned(self) -> dict[str, Any]:
@@ -117,6 +120,7 @@ class PatronRuntime:
             trigger_packet["resource_type"],
             trigger_packet["incident_type"],
             trigger_packet["reason"],
+            container_id=snapshot.container_id,
         )
         if incident is None:
             stage("Trigger", "suppressed by cooldown", self.verbose)
@@ -277,6 +281,10 @@ class PatronRuntime:
         metrics: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         return {
+            "schema_version": 1,
+            "event": "incident_snapshot",
+            "state_path": str(self.registry.state_path),
+            "incident": incident.to_dict(),
             "incident_id": incident.incident_id,
             "incident_type": incident.incident_type,
             "timestamps": {

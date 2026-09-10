@@ -9,7 +9,7 @@ No gate is complete solely because its local tests pass.
 | --- | --- | --- |
 | G0 | Verified | Unit baseline: 56 passed, 8 skipped. Real Docker suite: 8 passed, 56 deselected, 48.71 seconds. Normal CLI baseline: all eight PASSED; no simulation containers/networks remained. Checkpoint 8b1ca31. |
 | G1 | Verified | Commit 557f88f passed three independent full workflows on Linux amd64/arm64. See G1_VERIFICATION.md. |
-| G2 | In progress | Versioned state, migration backups, revision conflicts, and runtime ownership lock implemented. Operator inbox/CLI and complete verification pending. |
+| G2 | In progress | Versioned state, ownership, operator inbox/CLI, idempotent results, and audit outbox implemented. Generation semantics and real-process qualification still pending. |
 | G3 | Not started | Sustained detection and false-positive corpus pending. |
 | G4 | Not started | Capture/replay and fake shadow comparison pending. |
 | G5 | Not started | Full qualification pending. |
@@ -108,3 +108,25 @@ and create a linked new incident only if a later collection still detects failur
 - Verification: 85 unit tests passed, 8 integration tests skipped by default.
   Live Docker regression suite: 8 passed in 52.83 seconds (82 unit tests deselected
   at invocation). Evidence: artifacts/raw/g2-storage.xml. Run-scoped cleanup passed.
+
+## G2 operator control implementation
+
+- Added harness/control.py and incidents list/show/acknowledge/rearm CLI commands.
+  Live requests queue atomically; offline requests use the same mutation code.
+  Request IDs, expected revisions, actor/reason, dry-run, and bounded waits are supported.
+- Acknowledge changes metadata only. Rearm retains terminal history and links the
+  next incident, without directly executing Docker actions. Healthy cycles do nothing.
+- State contains applied results plus a pending audit outbox. Pending audit never
+  returns success. Recovery tests cover failure before logging and after audit fsync;
+  stable event IDs prevent duplicate delivery after restart.
+- Current result cache is bounded to 256 entries; older results remain queryable
+  from audit events. Completed inbox files are removed only after durable delivery.
+- Runtime audit snapshots include full incident metadata and state-path provenance.
+  Operator readers merge active state with scoped audit history, including resolved
+  incidents. Legacy unscoped records are restricted to known resources for custom state.
+- Audit appends now hold a file lock and fail closed on incomplete final records.
+- Unit suite: 100 passed, 8 opt-in skipped. Real Docker regression: 8 passed in
+  59.91 seconds (94 unit cases deselected at invocation), artifacts/raw/g2-control.xml.
+- Still required before G2 completion: generation-aware suppression/rearm review,
+  real live/offline process workflows, broader concurrent request/crash tests,
+  state control-envelope validation, docs review, and full G2 CI qualification.
