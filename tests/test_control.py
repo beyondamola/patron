@@ -275,3 +275,12 @@ def test_concurrent_duplicate_producers_preserve_one_request(tmp_path):
     with ThreadPoolExecutor(max_workers=8) as pool:
         list(pool.map(control.submit, [req] * 16))
     assert len(list(control.inbox.glob("*.json"))) == 1
+
+
+def test_resolved_symptom_does_not_suppress_different_cause(tmp_path):
+    registry, incident, control = setup(tmp_path)
+    incident.incident_type = "CONTAINER_STOPPED"
+    registry.mark_resolved(incident)
+    assert registry.in_cooldown("x", "generation-1", "CONTAINER_STOPPED")
+    new, created = registry.get_or_open("x", "docker_container", "CONTAINER_OOM_KILLED", "oom", container_id="generation-1")
+    assert created and new.incident_type == "CONTAINER_OOM_KILLED"

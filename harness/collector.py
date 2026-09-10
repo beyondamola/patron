@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import subprocess
 from abc import ABC, abstractmethod
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 from typing import Any
 
 
@@ -83,7 +83,19 @@ class DockerCollector(Collector):
             )
 
         snapshot = snapshot_from_docker_inspect(self.container_name, json.loads(result.stdout)[0])
-        return enrich_snapshot(self.container_name, snapshot)
+        enriched = enrich_snapshot(self.container_name, snapshot)
+        # Logs/stats take time; do not act on an exit snapshot taken before OOM metadata settled.
+        if not snapshot.running and not snapshot.oom_killed and snapshot.container_id:
+            latest = docker_run(["docker", "inspect", snapshot.container_id],
+                                check=False, capture_output=True, text=True)
+            if latest.returncode:
+                return ContainerSnapshot(self.container_name, False, False, "inspect_failed",
+                                         {"stderr": latest.stderr})
+            confirmed = snapshot_from_docker_inspect(self.container_name, json.loads(latest.stdout)[0])
+            return replace(confirmed, recent_logs=enriched.recent_logs, error_patterns=enriched.error_patterns,
+                           cpu_percent=enriched.cpu_percent, disk_usage_percent=enriched.disk_usage_percent,
+                           dependency_status=enriched.dependency_status)
+        return enriched
 
 
 def snapshot_from_docker_inspect(container_name: str, payload: dict[str, Any]) -> ContainerSnapshot:

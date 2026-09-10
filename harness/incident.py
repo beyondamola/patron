@@ -121,6 +121,7 @@ class IncidentRegistry:
         self.audit_path: str | None = None
         self.observed_generations: dict[str, str] = {}
         self.resolved_generations: dict[str, str | None] = {}
+        self.resolved_incident_types: dict[str, str] = {}
         self.load()
 
     def load(self) -> None:
@@ -158,7 +159,7 @@ class IncidentRegistry:
         self.audit_path = payload.get("audit_path")
         if self.audit_path is not None and not isinstance(self.audit_path, str):
             raise ValueError("State audit_path must be a string")
-        for field in ("observed_generations", "resolved_generations"):
+        for field in ("observed_generations", "resolved_generations", "resolved_incident_types"):
             value = payload.get(field, {})
             if not isinstance(value, dict) or any(not isinstance(key, str) or (item is not None and not isinstance(item, str)) for key, item in value.items()):
                 raise ValueError(f"Invalid {field}")
@@ -207,6 +208,7 @@ class IncidentRegistry:
             "audit_path": self.audit_path,
             "observed_generations": self.observed_generations,
             "resolved_generations": self.resolved_generations,
+            "resolved_incident_types": self.resolved_incident_types,
         }
         atomic_json(self.state_path, payload)
         self.revision += 1
@@ -228,7 +230,10 @@ class IncidentRegistry:
             return incident
         return None
 
-    def in_cooldown(self, resource: str, container_id: str | None = None) -> bool:
+    def in_cooldown(self, resource: str, container_id: str | None = None, incident_type: str | None = None) -> bool:
+        previous_type = self.resolved_incident_types.get(resource)
+        if incident_type and previous_type and incident_type != previous_type:
+            return False
         observed = container_id or self.observed_generations.get(resource)
         resolved_id = self.resolved_generations.get(resource)
         if observed and resolved_id and observed != resolved_id:
@@ -259,7 +264,7 @@ class IncidentRegistry:
             active.incident_type = incident_type
             active.trigger_reason = trigger_reason
             return active, False
-        if self.in_cooldown(resource, container_id):
+        if self.in_cooldown(resource, container_id, incident_type):
             return None, False
         incident = Incident.open(resource, resource_type, incident_type, trigger_reason)
         incident.container_id = container_id
@@ -273,6 +278,7 @@ class IncidentRegistry:
         incident.touch()
         self.resolved_at[incident.resource] = incident.updated_at
         self.resolved_generations[incident.resource] = incident.container_id
+        self.resolved_incident_types[incident.resource] = incident.incident_type
         self.incidents.pop(incident.resource, None)
 
     def mark_final(self, incident: Incident, status: str) -> None:

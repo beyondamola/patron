@@ -79,3 +79,15 @@ def test_error_pattern_detection() -> None:
     ])
 
     assert patterns == ["bad_config", "dependency_down", "disk_full"]
+def test_terminal_inspection_refreshes_delayed_oom_evidence(monkeypatch):
+    import json
+    from unittest.mock import Mock
+    from harness.collector import DockerCollector
+    payload = {"Id": "container-id", "State": {"Running": False, "Status": "exited", "OOMKilled": False}}
+    final = {**payload, "State": {**payload["State"], "OOMKilled": True}}
+    run = Mock(side_effect=[Mock(returncode=0, stdout=json.dumps([payload])),
+                            Mock(returncode=0, stdout=json.dumps([final]))])
+    monkeypatch.setattr("harness.collector.docker_run", run)
+    monkeypatch.setattr("harness.collector.enrich_snapshot", lambda name, snapshot: snapshot)
+    assert DockerCollector("target").collect().oom_killed
+    assert run.call_args.args[0] == ["docker", "inspect", "container-id"]

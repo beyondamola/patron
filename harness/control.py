@@ -185,6 +185,7 @@ class IncidentControl:
                 if self.registry.resolved_generations.get(current.resource) in {None, current.container_id}:
                     self.registry.resolved_at.pop(current.resource, None)
                     self.registry.resolved_generations.pop(current.resource, None)
+                    self.registry.resolved_incident_types.pop(current.resource, None)
                 incident = current.to_dict()
         if dry_run:
             return {**result, "status": "DRY_RUN" if not error else "REJECTED"}

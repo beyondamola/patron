@@ -35,7 +35,7 @@ def until(predicate, timeout=30):
 def test_real_operator_workflow():
     assert docker_available(), "Docker required for operator qualification"
     scenario = default_registry().get("oom_killed")
-    context = ScenarioContext("oom_killed", f"patron-ops-{uuid4().hex[:10]}", keep_resources=True)
+    context = ScenarioContext("oom_killed", f"patron-ops-{uuid4().hex[:10]}", keep_resources=True, trace=True)
     root = Path("logs/scenarios") / context.scenario_id
     state = root / "incident_state.json"
     processes = []
