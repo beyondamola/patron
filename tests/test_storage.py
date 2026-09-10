@@ -131,3 +131,12 @@ def test_newly_unsupported_schema_rejected_before_collection(tmp_path):
     with pytest.raises(ValueError, match="schema"):
         runtime.process_once()
     collector.collect.assert_not_called()
+
+
+def test_exclusive_publication_never_overwrites(tmp_path):
+    path = tmp_path / "request.json"
+    atomic_json(path, {"request": "first"}, replace_existing=False)
+    with pytest.raises(FileExistsError):
+        atomic_json(path, {"request": "second"}, replace_existing=False)
+    assert json.loads(path.read_text()) == {"request": "first"}
+    assert list(tmp_path.iterdir()) == [path]

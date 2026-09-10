@@ -22,7 +22,7 @@ def sync_directory(path: Path) -> None:
         os.close(descriptor)
 
 
-def atomic_json(path: Path, payload: dict) -> None:
+def atomic_json(path: Path, payload: dict, *, replace_existing: bool = True) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     descriptor, temporary = tempfile.mkstemp(prefix=f".{path.name}.", dir=path.parent)
     try:
@@ -31,7 +31,11 @@ def atomic_json(path: Path, payload: dict) -> None:
             stream.write("\n")
             stream.flush()
             os.fsync(stream.fileno())
-        os.replace(temporary, path)
+        if replace_existing:
+            os.replace(temporary, path)
+        else:
+            # Linking a fully synced file publishes it atomically without overwriting.
+            os.link(temporary, path)
         sync_directory(path.parent)
     finally:
         if os.path.exists(temporary):

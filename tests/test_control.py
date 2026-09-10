@@ -257,3 +257,21 @@ def test_two_queued_requests_have_explicit_durable_outcomes(tmp_path):
     assert not list(control.inbox.glob("*.json"))
     reloaded = IncidentControl(IncidentRegistry(registry.state_path))
     assert [reloaded.request_result(req.request_id)["status"] for req in requests] == statuses
+
+
+def test_concurrent_producers_publish_independently(tmp_path):
+    from concurrent.futures import ThreadPoolExecutor
+    registry, incident, control = setup(tmp_path)
+    requests = [request(registry, incident) for _ in range(16)]
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        list(pool.map(control.submit, requests))
+    assert {path.stem for path in control.inbox.glob("*.json")} == {req.request_id for req in requests}
+
+
+def test_concurrent_duplicate_producers_preserve_one_request(tmp_path):
+    from concurrent.futures import ThreadPoolExecutor
+    registry, incident, control = setup(tmp_path)
+    req = request(registry, incident)
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        list(pool.map(control.submit, [req] * 16))
+    assert len(list(control.inbox.glob("*.json"))) == 1

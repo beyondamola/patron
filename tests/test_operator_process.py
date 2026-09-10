@@ -89,6 +89,7 @@ def test_real_operator_workflow():
                            "--json", "--reason", f"parallel-{index}", "--wait", "10")
         with ThreadPoolExecutor(max_workers=2) as pool:
             responses = list(pool.map(concurrent_ack, (1, 2)))
+        assert all(response.stdout for response in responses), [(response.returncode, response.stderr) for response in responses]
         outcomes = [json.loads(response.stdout) for response in responses]
         assert any(outcome["status"] == "APPLIED" for outcome in outcomes)
         assert all(outcome["status"] in {"APPLIED", "REJECTED"} for outcome in outcomes)

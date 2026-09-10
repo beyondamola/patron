@@ -10,7 +10,7 @@ from uuid import UUID, uuid4
 
 from .audit import AuditLogger
 from .incident import ESCALATED, FAILED, IncidentRegistry, utc_now
-from .storage import StateConflict, StateLock, atomic_json, sync_directory
+from .storage import StateConflict, atomic_json, sync_directory
 
 
 @dataclass(frozen=True)
@@ -128,14 +128,15 @@ class IncidentControl:
     def submit(self, request: ControlRequest) -> None:
         request.validate()
         self.inbox.mkdir(parents=True, exist_ok=True)
-        with StateLock(self.inbox / "queue").acquire():
-            path = self.inbox / f"{request.request_id}.json"
-            if path.exists():
-                existing = json.loads(path.read_text())
-                if any(existing.get(key) != getattr(request, key) for key in ("incident_id", "operation", "reason", "actor")):
-                    raise StateConflict("Request ID already has different contents")
-            else:
-                atomic_json(path, asdict(request))
+        path = self.inbox / f"{request.request_id}.json"
+        try:
+            atomic_json(path, asdict(request), replace_existing=False)
+        except FileExistsError:
+            if path.is_symlink():
+                raise ValueError("Control request must not be a symlink")
+            existing = json.loads(path.read_text())
+            if any(existing.get(key) != getattr(request, key) for key in ("incident_id", "operation", "reason", "actor")):
+                raise StateConflict("Request ID already has different contents")
 
     def _event(self, request, result, incident):
         return {"schema_version": 1, "event": "operator_control", "event_id": request.request_id,
