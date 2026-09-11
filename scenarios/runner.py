@@ -51,6 +51,7 @@ def run_scenario(
                 interval=context.patron_interval,
                 trace=context.trace,
                 config=context.detector_config,
+                capture=context.capture,
             )
             patron.start()
             if not patron.wait_ready():
@@ -66,6 +67,8 @@ def run_scenario(
                 f"--interval {context.patron_interval} --verbose --trace "
                 f"--config {shlex.quote(str(config_path.resolve()))}"
             )
+            if context.capture:
+                command += f" --capture {shlex.quote(str(config_path.with_name('capture.jsonl').resolve()))}"
             print(f"External Patron mode. Start this command now: {command}", flush=True)
 
         context.narrate(

@@ -31,6 +31,7 @@ class ScenarioContext:
     started_at: str = field(default_factory=utc_now)
     docker: DockerClient = field(default_factory=DockerClient)
     detector_config: DetectorConfig = field(default_factory=DetectorConfig)
+    capture: bool = False
 
     @property
     def labels(self) -> dict[str, str]:

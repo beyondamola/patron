@@ -20,11 +20,13 @@ class ManagedPatron:
         trace: bool = False,
         log_root: Path | str = "logs/scenarios",
         config: DetectorConfig | None = None,
+        capture: bool = False,
     ) -> None:
         self.target = target
         self.scenario_id = scenario_id
         self.interval = interval
         self.trace = trace
+        self.capture = capture
         self.config = config or DetectorConfig()
         self.config.validate_interval(interval)
         self.log_dir = Path(log_root) / scenario_id
@@ -50,6 +52,8 @@ class ManagedPatron:
         ]
         if self.trace:
             command.append("--trace")
+        if self.capture:
+            command.extend(["--capture", str((self.log_dir / "capture.jsonl").resolve())])
         return command
 
     def start(self) -> None:

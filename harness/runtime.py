@@ -1,10 +1,11 @@
 from __future__ import annotations
 
-import time
 import signal
+from pathlib import Path
 from typing import Any
 
 from .audit import AuditLogger
+from .capture import CaptureError, CaptureWriter
 from .collector import Collector, DockerCollector
 from .config import DetectorConfig
 from .context_manager import build_context
@@ -36,6 +37,7 @@ class PatronRuntime:
         config: DetectorConfig | None = None,
         planner=None,
         executor=None,
+        capture_path: str | Path | None = None,
     ) -> None:
         self.container_name = container_name
         self.dry_run = dry_run
@@ -51,18 +53,71 @@ class PatronRuntime:
         self.executor = executor if executor is not None else DockerExecutor()
         self.verifier = verifier
         self.triggers = triggers or default_trigger_registry(config=self.config, clock=self.clock.monotonic)
+        self.capture_path = Path(capture_path).resolve() if capture_path else None
+        self.capture = None
+        self._observation_id = None
+        self._capture_incident_id = None
+        if self.capture_path in {self.registry.state_path, self.audit_logger.path.resolve()}:
+            raise ValueError("capture must be separate from state and incident audit")
+
+    def _start_capture(self) -> None:
+        if self.capture_path is not None and self.capture is None:
+            self.capture = CaptureWriter(self.capture_path, config=self.config,
+                initial_state=self.registry.export_state(), clock=self.clock,
+                runtime_settings={"target": self.container_name, "dry_run": self.dry_run,
+                                  "cooldown_seconds": self.registry.cooldown_seconds})
+
+    def _emit(self, event: str, payload: dict) -> None:
+        if self.capture is not None:
+            try:
+                self.capture.emit(event, payload, observation_id=self._observation_id,
+                                  incident_id=self._capture_incident_id)
+            except Exception as exc:
+                raise CaptureError(f"capture write failed: {exc}") from exc
+
+    def finish_capture(self, *, complete: bool = True) -> None:
+        if self.capture is not None:
+            try:
+                if complete:
+                    self._emit("run_end", {"state": self.registry.export_state()})
+            finally:
+                self.capture.close()
+
+    def _verify(self, name, incident_type, decision, **kwargs):
+        if self.capture is not None and self.verifier is verify_incident:
+            def observed(snapshot):
+                try:
+                    self.capture.observe(snapshot, verification=True,
+                        observation_id=self._observation_id, incident_id=self._capture_incident_id)
+                except Exception as exc:
+                    raise CaptureError(f"verifier capture failed: {exc}") from exc
+            result = self.verifier(name, incident_type, decision, clock=self.clock,
+                                   on_observation=observed, **kwargs)
+        else:
+            result = self.verifier(name, incident_type, decision, **kwargs)
+        self._emit("verification", {"decision": decision, "incident_type": incident_type,
+                                    "result": result.to_dict(), "incident_status": kwargs.get("incident_status")})
+        return result
 
     def process_once(self) -> dict[str, Any]:
         trace_packet("detector configuration", {"settings": self.config.to_dict(),
                      "fingerprint": self.config.fingerprint}, self.trace)
         with self.registry.lock.acquire():
             self.registry.check_revision()
-            IncidentControl(self.registry, self.audit_logger).process_pending()
-            return self._process_owned()
+            self._start_capture()
+            self._observation_id = self._capture_incident_id = None
+            self._emit("cycle_start", {"dry_run": self.dry_run})
+            IncidentControl(self.registry, self.audit_logger,
+                observer=(lambda payload: self._emit("control", payload)) if self.capture else None).process_pending()
+            result = self._process_owned()
+            self._emit("cycle_end", {"result": result, "state": self.registry.export_state()})
+            return result
 
     def _process_owned(self) -> dict[str, Any]:
         try:
             return self._process_once()
+        except CaptureError:
+            raise
         except Exception as exc:
             incident = self.registry.active_for(self.container_name)
             if incident:
@@ -80,7 +135,13 @@ class PatronRuntime:
     def _process_once(self) -> dict[str, Any]:
         cycle_started = self.clock.monotonic()
         snapshot = self.collector.collect()
+        if self.capture is not None:
+            try:
+                self._observation_id = self.capture.observe(snapshot)
+            except Exception as exc:
+                raise CaptureError(f"observation capture failed: {exc}") from exc
         trigger_packet, trigger_traces = self.triggers.evaluate_with_trace(snapshot)
+        self._emit("trigger", {"packet": trigger_packet, "traces": trigger_traces})
         for trigger_trace in trigger_traces:
             trace_packet(f"TriggerTrace {trigger_trace['incident_type']}", trigger_trace, self.trace)
         if not snapshot.exists:
@@ -109,7 +170,8 @@ class PatronRuntime:
         if trigger_packet is None:
             stage("Trigger", "no incident", self.verbose)
             if active:
-                result = self.verifier(snapshot.name, active.incident_type, "restart_container")
+                self._capture_incident_id = active.incident_id
+                result = self._verify(snapshot.name, active.incident_type, "restart_container")
                 if not result.passed:
                     return {"triggered": False, "healthy": False, "snapshot_status": snapshot.status}
                 self.registry.mark_resolved(active)
@@ -120,6 +182,7 @@ class PatronRuntime:
                 }
                 self.audit_logger.log(self._audit_record(active, resolved_packet, None, None, None, None))
                 self.registry.persist()
+                self._emit("transition", {"incident": active.to_dict()})
                 stage("Audit", "incident logged", self.verbose)
             return {
                 "triggered": False,
@@ -147,19 +210,24 @@ class PatronRuntime:
 
         incident.status = RUNNING
         incident.touch(self.clock)
+        self._capture_incident_id = incident.incident_id
+        self._emit("transition", {"incident": incident.to_dict(), "created": created})
 
         context = build_context(snapshot, incident, trigger_packet)
+        self._emit("context", {"context": context})
         stage("Context", "status collected; logs collected", self.verbose)
         trace_packet("context packet", context, self.trace)
 
         planning_started = self.clock.monotonic()
         plan = self.planner.plan(context)
         planning_latency = self.clock.monotonic() - planning_started
+        self._emit("plan", {"plan": plan})
         incident.last_action = plan.get("decision")
         stage("Planner", str(plan.get("decision")), self.verbose)
         trace_packet("planner JSON", plan, self.trace)
 
         policy = validate_plan(plan, context)
+        self._emit("policy", {"policy": policy.to_dict()})
         stage("Policy", "APPROVED" if policy.allowed else "DENY", self.verbose)
         trace_packet("policy output", policy.to_dict(), self.trace)
 
@@ -199,7 +267,9 @@ class PatronRuntime:
             trace_packet("verifier response", verification.to_dict(), self.trace)
         else:
             execution_started = self.clock.monotonic()
+            self._emit("action_requested", {"plan": plan, "resource": context["resource"]})
             execution = self.executor.execute(plan, context)
+            self._emit("execution", {"result": execution})
             execution_latency = self.clock.monotonic() - execution_started
             if plan["decision"] == "escalate":
                 stage("Executor", f"escalate {context['resource']}", self.verbose)
@@ -210,9 +280,9 @@ class PatronRuntime:
             verification_started = self.clock.monotonic()
             if plan["decision"] == "escalate" and execution.get("success"):
                 self.registry.mark_final(incident, ESCALATED)
-                verification = self.verifier(context["resource"], incident.incident_type, plan["decision"], incident_status=incident.status)
+                verification = self._verify(context["resource"], incident.incident_type, plan["decision"], incident_status=incident.status)
             else:
-                verification = self.verifier(context["resource"], incident.incident_type, plan["decision"])
+                verification = self._verify(context["resource"], incident.incident_type, plan["decision"])
             verification_latency = self.clock.monotonic() - verification_started
             incident.verification_state = verification.to_dict()
             stage("Verifier", "PASS" if verification.passed else "FAIL", self.verbose)
@@ -230,6 +300,11 @@ class PatronRuntime:
                     incident.status = OPEN
                     incident.touch(self.clock)
 
+        if execution and execution.get("skipped"):
+            self._emit("execution", {"result": execution})
+            self._emit("verification", {"decision": plan.get("decision"),
+                "incident_type": incident.incident_type, "result": verification.to_dict(),
+                "incident_status": incident.status})
         metrics = {
             "incident_type": incident.incident_type,
             "detection_latency_seconds": None,
@@ -252,14 +327,21 @@ class PatronRuntime:
         )
         self.audit_logger.log(record)
         self.registry.persist()
+        self._emit("transition", {"incident": incident.to_dict()})
         stage("Audit", "incident logged", self.verbose)
         return {"triggered": True, "incident": incident.to_dict(), "audit": record}
 
     def watch(self, interval: int = 10) -> int:
         self.config.validate_interval(interval)
-        with self.registry.lock.acquire():
-            self.registry.check_revision()
-            return self._watch_owned(interval)
+        complete = False
+        try:
+            with self.registry.lock.acquire():
+                self.registry.check_revision()
+                result = self._watch_owned(interval)
+                complete = True
+                return result
+        finally:
+            self.finish_capture(complete=complete)
 
     def _watch_owned(self, interval: int) -> int:
         stage("Runtime", f"watching every {interval}s", True)

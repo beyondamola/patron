@@ -297,3 +297,25 @@ and create a linked new incident only if a later collection still detects failur
   remain. No current CLI command is claimed to generate complete captures.
 - Added tests/test_capture.py and tests/test_verifier_observations.py. Full unit
   suite result recorded at this checkpoint: 195 passed, 9 opt-in skipped.
+
+## G4 runtime capture wiring (2026-09-11)
+
+- Opt-in --capture on run/watch and lab run/run-all now writes the observation
+  stream, initial registry envelope, runtime settings, cycle boundaries, trigger
+  traces, context, plan/policy, requested/executed actions, individual default
+  verifier reads, verification results, terminal state, and queued operator
+  requests before/after application. State export is detached and read-only.
+- CLI/watch close streams in finally; successful completion emits run_end and
+  interrupted capture does not. Write failures before action_requested prevent
+  executor invocation. Capture files cannot equal the state or incident audit.
+- Unit result: 201 passed, 9 opt-in skipped, 0.77s. New runtime tests cover
+  healthy/error cycles, successful restart references, dry-run skipped stages,
+  write failure, path separation, and queued operator acknowledgment events.
+- Real Docker: python3 -m scenarios run unhealthy --capture --verbose PASSED,
+  including cleanup. Scenario b3521f87-bb35-4871-8d05-72aaa73a23b9; capture at
+  logs/scenarios/b3521f87-bb35-4871-8d05-72aaa73a23b9/capture.jsonl was read back.
+  It contains 4 main observations (healthy, healthy, unhealthy, healthy), separate
+  verifier reads (starting, healthy), one action, and a clean run_end.
+- Still incomplete: full event/payload/reference and initial-state validation,
+  causal replay, counterfactual comparisons, replay fixtures, fake shadow, and
+  full G4/G5 qualification. Structural read-back is not exact replay evidence.

@@ -78,10 +78,11 @@ def audit_records(path: Path):
 
 
 class IncidentControl:
-    def __init__(self, registry: IncidentRegistry, audit: AuditLogger | None = None):
+    def __init__(self, registry: IncidentRegistry, audit: AuditLogger | None = None, *, observer=None):
         self.registry = registry
         self.audit = audit or AuditLogger(registry.audit_path or "logs/incidents.jsonl")
         self.inbox = registry.state_path.with_name(registry.state_path.name + ".requests")
+        self.observer = observer
 
     def incidents(self) -> dict:
         records = {}
@@ -232,7 +233,12 @@ class IncidentControl:
             request = ControlRequest(**json.loads(path.read_text()))
             if path.stem != request.request_id:
                 raise ValueError("Control request filename does not match its ID")
-            self.apply(request)
+            if self.observer is not None:
+                self.observer({"phase": "requested", "request": asdict(request)})
+            result = self.apply(request)
+            if self.observer is not None:
+                self.observer({"phase": "applied", "request": asdict(request), "result": result,
+                               "state": self.registry.export_state()})
             path.unlink()
             sync_directory(self.inbox)
 

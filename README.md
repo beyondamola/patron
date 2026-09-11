@@ -458,6 +458,29 @@ This remains a local, single-target MVP. Resource statistics are sampled once pe
 This project does not include Kubernetes, Ansible, web UI, database, cloud deployment, authentication, billing, multi-agent orchestration, random chaos testing, production-target support, or unrestricted shell-command execution.
 # Detector Configuration
 
+## Experimental Capture
+
+`python -m harness run --capture logs/captures/run.jsonl` and
+`python -m harness watch --capture logs/captures/watch.jsonl` opt into a separate
+normalized JSONL stream. Use a new path for every run; existing files are never
+overwritten. Captures include initial state, healthy/error observations, trigger
+decisions, context/plans/policy, action requests/results, individual verifier
+reads, operator requests, cycle state, and a clean shutdown marker. Dry runs
+record skipped actions. A capture write failure stops the current execution path.
+
+`python -m scenarios run unhealthy --capture --verbose` stores the managed
+runtime capture at `logs/scenarios/<scenario-id>/capture.jsonl`. The same option
+is available for `run-all`. Scenario result/injection timestamps remain separate
+from runtime observations; unknown runtime onset is not filled from the lab.
+
+Raw inspect, environment variables, and arbitrary Docker labels are omitted.
+Log capture is bounded and applies credential-pattern redaction, but this is not
+a guarantee that arbitrary application text contains no sensitive information.
+Treat captures as local diagnostic data and review before sharing. Capture
+validation and causal replay are still under development; no replay command is
+available yet, and a structurally readable capture is not yet proof of exact
+replayability.
+
 `harness run`, `harness watch`, `harness inspect-docker`, `scenarios run`, and
 `scenarios run-all` accept `--config path/to/detectors.json`. Omitted settings
 use validated defaults. For example:

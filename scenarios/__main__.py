@@ -49,6 +49,7 @@ def build_parser() -> argparse.ArgumentParser:
     run_all_parser.add_argument("--reset-simulation-state", action="store_true")
     for command in (run_parser, run_all_parser):
         command.add_argument("--config", help="shared detector settings JSON file")
+        command.add_argument("--capture", action="store_true", help="capture managed Patron observations and decisions")
 
     cleanup_parser = subparsers.add_parser("cleanup", help="remove Patron simulation resources")
     cleanup_parser.add_argument("--verbose", action="store_true")
@@ -107,6 +108,7 @@ def main(argv: list[str] | None = None) -> int:
             patron_interval=args.patron_interval,
             reset_simulation_state=args.reset_simulation_state,
             detector_config=config,
+            capture=args.capture,
         )
         result = run_scenario(scenario, context)
         print(result.to_json())
@@ -127,6 +129,7 @@ def main(argv: list[str] | None = None) -> int:
                 patron_interval=args.patron_interval,
                 reset_simulation_state=args.reset_simulation_state,
                 detector_config=config,
+                capture=args.capture,
             )
             result = run_scenario(scenario, context)
             results.append(result)

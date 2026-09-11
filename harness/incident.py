@@ -204,9 +204,17 @@ class IncidentRegistry:
                     stream.flush()
                     os.fsync(stream.fileno())
                 sync_directory(backup.parent)
+        payload = self.export_state()
+        payload["revision"] = self.revision + 1
+        atomic_json(self.state_path, payload)
+        self.revision += 1
+        self._legacy = False
+
+    def export_state(self) -> dict:
+        """Return a detached envelope without changing its revision or storage."""
         payload = {
             "schema_version": STATE_SCHEMA_VERSION,
-            "revision": self.revision + 1,
+            "revision": self.revision,
             "incidents": {
                 key: incident.to_dict()
                 for key, incident in self.incidents.items()
@@ -219,9 +227,7 @@ class IncidentRegistry:
             "resolved_generations": self.resolved_generations,
             "resolved_incident_types": self.resolved_incident_types,
         }
-        atomic_json(self.state_path, payload)
-        self.revision += 1
-        self._legacy = False
+        return json.loads(json.dumps(payload))
 
     def matches_generation(self, incident: Incident, container_id: str | None = None) -> bool:
         observed = container_id or self.observed_generations.get(incident.resource)

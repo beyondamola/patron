@@ -15,9 +15,13 @@ from .config import DetectorConfig
 
 SCHEMA_VERSION = 1
 REDACTION_VERSION = 1
-EVENTS = {"run_start", "observation", "context", "plan", "policy", "action_requested",
+EVENTS = {"run_start", "cycle_start", "trigger", "observation", "context", "plan", "policy", "action_requested",
           "execution", "verification_observation", "verification", "transition", "control",
           "cycle_end", "run_end"}
+
+
+class CaptureError(RuntimeError):
+    """Capture is required once enabled; do not continue with missing evidence."""
 SNAPSHOT_FIELDS = (
     "name", "exists", "running", "status", "exit_code", "health", "restart_count",
     "container_id", "has_healthcheck", "restart_policy", "oom_killed",
@@ -66,7 +70,8 @@ def normalized_snapshot(snapshot: ContainerSnapshot, origin: float) -> dict:
 
 class CaptureWriter:
     def __init__(self, path: str | Path, *, config: DetectorConfig, initial_state: dict,
-                 clock: Clock | None = None, run_id: str | None = None) -> None:
+                 clock: Clock | None = None, run_id: str | None = None,
+                 runtime_settings: dict | None = None) -> None:
         self.clock = clock or SystemClock()
         self.origin = self.clock.monotonic()
         self.run_id = run_id or str(uuid4())
@@ -79,6 +84,7 @@ class CaptureWriter:
         try:
             self.emit("run_start", {"config": config.to_dict(), "config_fingerprint": config.fingerprint,
                       "initial_state": initial_state, "collector_version": 1,
+                      "runtime_settings": runtime_settings or {},
                       "redaction_version": REDACTION_VERSION})
         except BaseException:
             self.handle.close()
