@@ -480,8 +480,19 @@ Treat captures as local diagnostic data and review before sharing. Capture
 validation is available with `python -m harness replay validate <capture-path>`.
 It checks state/observation types, sequence and incident references, cycle/action
 ordering, required verifier observations, and clean closure. Validation does not
-execute Docker or alter the input. Exact replay and comparison remain under
-development; a validated capture is not yet proof of a reproduced outcome.
+execute Docker or alter the input. Initial exact replay is available through
+`python -m harness replay run <capture-path> --output <new-report-path>`.
+It recomputes trigger/context/rule-planner/policy and lifecycle decisions using
+recorded execution/verification responses, with temporary state and audit sinks.
+The report compares behavioral state, not storage paths, wall-clock timestamps,
+or stage latency; recorded latency is reported separately. Window coverage is
+compared at microsecond precision after monotonic-origin conversion.
+
+Use a fresh capture: older captures lacking runtime mode cannot reproduce the
+watch shutdown persistence step and are rejected with a missing-evidence error.
+This is still G4 work in progress: operator-event replay, broader lifecycle
+fixtures, counterfactual comparisons, and fake shadow evaluation are not yet
+qualified. Unsupported event sequences fail rather than claim a matching replay.
 
 `harness run`, `harness watch`, `harness inspect-docker`, `scenarios run`, and
 `scenarios run-all` accept `--config path/to/detectors.json`. Omitted settings

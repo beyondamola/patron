@@ -126,6 +126,9 @@ def build_parser() -> argparse.ArgumentParser:
     replay_commands = replay_parser.add_subparsers(dest="replay_command", required=True)
     validate_parser = replay_commands.add_parser("validate", help="validate capture structure and causal references")
     validate_parser.add_argument("capture_path")
+    replay_run = replay_commands.add_parser("run", help="reproduce recorded decisions with execution disabled")
+    replay_run.add_argument("capture_path")
+    replay_run.add_argument("--output", required=True)
     return parser
 
 
@@ -140,6 +143,18 @@ def main(argv: list[str] | None = None) -> int:
 def _main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     if args.command == "replay":
+        if args.replay_command == "run":
+            from pathlib import Path
+            from .replay import replay_capture
+            output = Path(args.output)
+            if output.resolve() == Path(args.capture_path).resolve():
+                raise ValueError("replay output must not overwrite input capture")
+            report = replay_capture(args.capture_path)
+            output.parent.mkdir(parents=True, exist_ok=True)
+            with output.open("x", encoding="utf-8") as handle:
+                handle.write(json.dumps(report, indent=2, sort_keys=True, allow_nan=False) + "\n")
+            print(json.dumps({"matched": report["matched"], "cycles": report["cycles"], "actions": report["actions"]}))
+            return 0
         from .capture import read_capture
         from .capture_validation import validate_capture
         summary = validate_capture(read_capture(args.capture_path))

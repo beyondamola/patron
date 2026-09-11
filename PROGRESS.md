@@ -337,3 +337,27 @@ and create a linked new incident only if a later collection still detects failur
   4 cycles, 1 action, 2 verifier observations. This proves capture validation,
   not replayed lifecycle agreement. Next: exact replay using explicit recorded
   adapters, then counterfactual comparison, corpus/shadow, and qualification.
+
+## G4 first exact replay (2026-09-11)
+
+- Added replay run CLI using existing PatronRuntime with recorded collector,
+  deterministic event clock/incident IDs, pure RulePlanner, recording-only
+  executor and recorded verifier responses. State/audit locations are explicitly
+  redirected to a TemporaryDirectory. Event payload/reference mismatches abort.
+- Captures now record mode=cycles/watch. Testing the older real capture exposed
+  its missing shutdown-persistence metadata; exact replay now rejects that old
+  format clearly. Fresh watch replay reproduces its final registry persist.
+- Semantic agreement excludes wall-clock timestamps, filesystem paths, and
+  performance metrics. Recorded metrics are separate report data. Coverage
+  comparisons round to microseconds to avoid cancellation from removing the
+  large monotonic origin. Behavioral predicates/states remain exact comparisons.
+- Unit suite: 218 passed, 9 opt-in skipped. Replay tests forbid live adapter
+  construction, subprocess/network, real sleep and monotonic/perf-counter calls;
+  three reports are identical, source files unchanged, and a changed plan fails.
+- Fresh real unhealthy run with --capture PASSED including cleanup; scenario
+  9302b516-728c-4cb9-9627-1657c0e1567b. Its capture replay matched 4 cycles and
+  1 action; report artifacts/raw/g4-first-replay.json. Three subsequent offline
+  replays produced identical semantic reports.
+- Still incomplete: operator/control replay, retries/rearm/restart corpus,
+  all-eight exact replay qualification, comparison report coverage, fake shadow,
+  and G4/G5 full validation. Initial replay support is not the whole goal.

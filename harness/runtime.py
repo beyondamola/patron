@@ -55,6 +55,7 @@ class PatronRuntime:
         self.triggers = triggers or default_trigger_registry(config=self.config, clock=self.clock.monotonic)
         self.capture_path = Path(capture_path).resolve() if capture_path else None
         self.capture = None
+        self._capture_mode = "cycles"
         self._observation_id = None
         self._capture_incident_id = None
         if self.capture_path in {self.registry.state_path, self.audit_logger.path.resolve()}:
@@ -65,6 +66,7 @@ class PatronRuntime:
             self.capture = CaptureWriter(self.capture_path, config=self.config,
                 initial_state=self.registry.export_state(), clock=self.clock,
                 runtime_settings={"target": self.container_name, "dry_run": self.dry_run,
+                                  "mode": self._capture_mode,
                                   "cooldown_seconds": self.registry.cooldown_seconds})
 
     def _emit(self, event: str, payload: dict) -> None:
@@ -333,6 +335,7 @@ class PatronRuntime:
 
     def watch(self, interval: int = 10) -> int:
         self.config.validate_interval(interval)
+        self._capture_mode = "watch"
         complete = False
         try:
             with self.registry.lock.acquire():
