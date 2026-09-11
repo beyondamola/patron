@@ -477,9 +477,11 @@ Raw inspect, environment variables, and arbitrary Docker labels are omitted.
 Log capture is bounded and applies credential-pattern redaction, but this is not
 a guarantee that arbitrary application text contains no sensitive information.
 Treat captures as local diagnostic data and review before sharing. Capture
-validation and causal replay are still under development; no replay command is
-available yet, and a structurally readable capture is not yet proof of exact
-replayability.
+validation is available with `python -m harness replay validate <capture-path>`.
+It checks state/observation types, sequence and incident references, cycle/action
+ordering, required verifier observations, and clean closure. Validation does not
+execute Docker or alter the input. Exact replay and comparison remain under
+development; a validated capture is not yet proof of a reproduced outcome.
 
 `harness run`, `harness watch`, `harness inspect-docker`, `scenarios run`, and
 `scenarios run-all` accept `--config path/to/detectors.json`. Omitted settings

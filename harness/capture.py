@@ -22,6 +22,8 @@ EVENTS = {"run_start", "cycle_start", "trigger", "observation", "context", "plan
 
 class CaptureError(RuntimeError):
     """Capture is required once enabled; do not continue with missing evidence."""
+
+
 SNAPSHOT_FIELDS = (
     "name", "exists", "running", "status", "exit_code", "health", "restart_count",
     "container_id", "has_healthcheck", "restart_policy", "oom_killed",
@@ -130,8 +132,9 @@ def read_capture(path: str | Path) -> list[dict]:
                 raise ValueError("capture record exceeds 1MB")
             if not line.endswith(b"\n"):
                 raise ValueError("incomplete final capture write")
-            record = json.loads(line, parse_constant=lambda value: (_ for _ in ()).throw(ValueError("nonfinite capture number")))
-            if not isinstance(record, dict) or record.get("schema_version") != SCHEMA_VERSION:
+            record = json.loads(line, parse_constant=_reject_number, parse_float=_finite_float,
+                                object_pairs_hook=_unique_keys)
+            if not isinstance(record, dict) or type(record.get("schema_version")) is not int or record["schema_version"] != SCHEMA_VERSION:
                 raise ValueError("unsupported capture schema; incident audit lacks replay observations")
             if type(record.get("sequence")) is not int or record["sequence"] != number:
                 raise ValueError("missing or out-of-order capture sequence")
@@ -159,3 +162,23 @@ def read_capture(path: str | Path) -> list[dict]:
     if records[0]["payload"].get("config_fingerprint") != config.fingerprint:
         raise ValueError("capture configuration fingerprint mismatch")
     return records
+
+
+def _reject_number(value):
+    raise ValueError("nonfinite capture number")
+
+
+def _finite_float(value):
+    number = float(value)
+    if not math.isfinite(number):
+        _reject_number(value)
+    return number
+
+
+def _unique_keys(pairs):
+    result = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError(f"duplicate capture key: {key}")
+        result[key] = value
+    return result

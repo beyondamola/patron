@@ -122,6 +122,10 @@ def build_parser() -> argparse.ArgumentParser:
             command.add_argument("--request-id")
             command.add_argument("--dry-run", action="store_true")
             command.add_argument("--wait", type=bounded_wait, default=5.0)
+    replay_parser = subparsers.add_parser("replay", help="validate recorded runtime evidence")
+    replay_commands = replay_parser.add_subparsers(dest="replay_command", required=True)
+    validate_parser = replay_commands.add_parser("validate", help="validate capture structure and causal references")
+    validate_parser.add_argument("capture_path")
     return parser
 
 
@@ -135,6 +139,12 @@ def main(argv: list[str] | None = None) -> int:
 
 def _main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
+    if args.command == "replay":
+        from .capture import read_capture
+        from .capture_validation import validate_capture
+        summary = validate_capture(read_capture(args.capture_path))
+        print(json.dumps({"valid": True, **summary}, sort_keys=True))
+        return 0
     if args.command == "incidents":
         registry = IncidentRegistry(args.state_path)
         control = IncidentControl(registry)

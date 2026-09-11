@@ -77,3 +77,13 @@ def test_partial_final_write_is_explicitly_incomplete(tmp_path):
     path.write_bytes(path.read_bytes()[:-1])
     with pytest.raises(ValueError, match="incomplete final"):
         read_capture(path)
+
+
+@pytest.mark.parametrize("text", ['{"schema_version":1,"schema_version":1}\n',
+                                  '{"schema_version":true}\n',
+                                  '{"value":1e999}\n'])
+def test_ambiguous_json_or_nonfinite_number_rejected(tmp_path, text):
+    path = tmp_path / "capture.jsonl"
+    path.write_text(text)
+    with pytest.raises(ValueError):
+        read_capture(path)

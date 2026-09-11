@@ -319,3 +319,21 @@ and create a linked new incident only if a later collection still detects failur
 - Still incomplete: full event/payload/reference and initial-state validation,
   causal replay, counterfactual comparisons, replay fixtures, fake shadow, and
   full G4/G5 qualification. Structural read-back is not exact replay evidence.
+
+## G4 semantic validation checkpoint (2026-09-11)
+
+- Added replay validate CLI and pure capture_validation module: validates state
+  envelope and incident/control records, normalized observation field types,
+  target identity, cycle ordering, control pairs, observation/incident references,
+  action authorization/order, outcome presence, and independent verifier reads.
+  Successful escalation requires the recorded actual ESCALATED transition state.
+- Reader now rejects duplicate JSON keys, boolean schema versions, and overflow
+  nonfinite numbers as well as partial writes and sequence errors. It continues
+  to distinguish structural read from semantic validation.
+- Unit suite: 216 passed, 9 opt-in skipped, 0.87s. New corruption cases exercise
+  typed state/metrics, wrong targets/references, missing outcomes, and policy
+  denial before an attempted action. Validation CLI is tested read-only.
+- Validated the real b3521f87-bb35-4871-8d05-72aaa73a23b9 unhealthy capture:
+  4 cycles, 1 action, 2 verifier observations. This proves capture validation,
+  not replayed lifecycle agreement. Next: exact replay using explicit recorded
+  adapters, then counterfactual comparison, corpus/shadow, and qualification.
