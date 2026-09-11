@@ -493,3 +493,13 @@ Managed scenarios write their exact settings to
 `logs/scenarios/<scenario-id>/detectors.json` and pass that file to Patron.
 External mode prints a command referencing the same file. Audit and scenario
 results include the effective settings and a SHA-256 configuration fingerprint.
+
+Collector log evidence is limited to the current container start and the last
+`log_evidence_seconds` (default 60). Only timestamped Docker log entries count;
+old, undated, and future entries are discarded. Missing or invalid start times
+produce no log evidence. CPU quota/period and NanoCpus are exposed separately.
+`probe_errors` explains unavailable logs, CPU, disk, or dependency observations.
+Failed dependency inspection is unknown, not evidence of a stopped dependency.
+Optional `disk_path` (absolute path) and `dependency` settings override discovery
+labels. Labels remain optional for collection. Disk probes use literal argv,
+and unavailable probes remain null rather than zero utilization.

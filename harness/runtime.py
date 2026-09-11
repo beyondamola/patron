@@ -77,6 +77,9 @@ class PatronRuntime:
     def _process_once(self) -> dict[str, Any]:
         cycle_started = time.perf_counter()
         snapshot = self.collector.collect()
+        trigger_packet, trigger_traces = self.triggers.evaluate_with_trace(snapshot)
+        for trigger_trace in trigger_traces:
+            trace_packet(f"TriggerTrace {trigger_trace['incident_type']}", trigger_trace, self.trace)
         if not snapshot.exists:
             stage("Collector", f"Cannot observe {snapshot.name}: {snapshot.status}", True)
             return {"triggered": False, "error": snapshot.status, "snapshot_status": snapshot.status}
@@ -96,9 +99,6 @@ class PatronRuntime:
             self.verbose,
         )
 
-        trigger_packet, trigger_traces = self.triggers.evaluate_with_trace(snapshot)
-        for trigger_trace in trigger_traces:
-            trace_packet(f"TriggerTrace {trigger_trace['incident_type']}", trigger_trace, self.trace)
         detection_latency = time.perf_counter() - cycle_started
         trace_packet("trigger packet", trigger_packet or {"incident_type": None}, self.trace)
 

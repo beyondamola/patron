@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 import json
+import math
+import re
 import subprocess
 import time
 from abc import ABC, abstractmethod
 from dataclasses import asdict, dataclass, replace
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from .config import DetectorConfig
@@ -42,6 +45,11 @@ class ContainerSnapshot:
     network_mode: str | None = None
     dependency_status: str | None = None
     observed_monotonic: float | None = None
+    started_at: str | None = None
+    cpu_quota: int | None = None
+    cpu_period: int | None = None
+    nano_cpus: int | None = None
+    probe_errors: dict[str, str] | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -97,10 +105,13 @@ class DockerCollector(Collector):
                 return ContainerSnapshot(self.container_name, False, False, "inspect_failed",
                                          {"stderr": latest.stderr})
             confirmed = snapshot_from_docker_inspect(self.container_name, json.loads(latest.stdout)[0])
-            return replace(confirmed, recent_logs=enriched.recent_logs, error_patterns=enriched.error_patterns,
+            same_start = confirmed.started_at == enriched.started_at
+            return replace(confirmed, recent_logs=enriched.recent_logs if same_start else [],
+                           error_patterns=enriched.error_patterns if same_start else [],
                            cpu_percent=enriched.cpu_percent, disk_usage_percent=enriched.disk_usage_percent,
-                           dependency_status=enriched.dependency_status, observed_monotonic=time.monotonic())
-        return replace(enriched, observed_monotonic=time.monotonic())
+                           dependency_status=enriched.dependency_status,
+                           probe_errors=enriched.probe_errors, observed_monotonic=enriched.observed_monotonic)
+        return enriched
 
 
 def snapshot_from_docker_inspect(container_name: str, payload: dict[str, Any]) -> ContainerSnapshot:
@@ -133,6 +144,10 @@ def snapshot_from_docker_inspect(container_name: str, payload: dict[str, Any]) -
         ports=ports,
         network_mode=host_config.get("NetworkMode"),
         dependency_status=None,
+        started_at=state.get("StartedAt"),
+        cpu_quota=host_config.get("CpuQuota") or None,
+        cpu_period=host_config.get("CpuPeriod") or None,
+        nano_cpus=host_config.get("NanoCpus") or None,
     )
 
 
@@ -140,11 +155,21 @@ def enrich_snapshot(container_name: str, snapshot: ContainerSnapshot, *, config:
     config = config or DetectorConfig()
     if not snapshot.exists:
         return snapshot
-    logs = collect_recent_logs(container_name)
+    target = snapshot.container_id or container_name
+    errors = {}
+    logs = collect_recent_logs(target, started_at=snapshot.started_at,
+                               max_age_seconds=config.log_evidence_seconds, errors=errors)
     patterns = detect_error_patterns(logs)
-    cpu = collect_cpu_percent(container_name)
-    disk = collect_disk_usage_percent(container_name, config.disk_path or (snapshot.labels or {}).get("patron.disk_path", "/tmp"))
+    cpu = collect_cpu_percent(target)
+    observed_monotonic = time.monotonic()
+    disk = collect_disk_usage_percent(target, config.disk_path or (snapshot.labels or {}).get("patron.disk_path", "/tmp"))
     dependency_status = collect_dependency_status(config.dependency or (snapshot.labels or {}).get("patron.dependency"))
+    if cpu is None:
+        errors["cpu"] = "stats unavailable or invalid CPU percentage"
+    if disk is None:
+        errors["disk"] = "df probe unavailable, unsupported, or invalid for configured path"
+    if dependency_status == "unknown":
+        errors["dependency"] = "dependency inspect unavailable or missing valid running state"
     return ContainerSnapshot(
         **{
             **snapshot.to_dict(),
@@ -153,20 +178,50 @@ def enrich_snapshot(container_name: str, snapshot: ContainerSnapshot, *, config:
             "cpu_percent": cpu,
             "disk_usage_percent": disk,
             "dependency_status": dependency_status,
+            "probe_errors": errors,
+            "observed_monotonic": observed_monotonic,
         }
     )
 
 
-def collect_recent_logs(container_name: str) -> list[str]:
+def parse_timestamp(value: str | None) -> datetime | None:
+    try:
+        # Docker emits nanoseconds; Python 3.9 accepts only microsecond precision.
+        normalized = re.sub(r"(\.\d{6})\d+(?=Z|[+-]\d\d:\d\d$)", r"\1", value)
+        parsed = datetime.fromisoformat(normalized.replace("Z", "+00:00"))
+        return parsed.astimezone(timezone.utc) if parsed.tzinfo else None
+    except (AttributeError, TypeError, ValueError):
+        return None
+
+
+def collect_recent_logs(container_name: str, *, started_at: str | None = None,
+                        max_age_seconds: float = 60, now: datetime | None = None,
+                        errors: dict | None = None) -> list[str]:
+    errors = errors if errors is not None else {}
+    now = now or datetime.now(timezone.utc)
+    start = parse_timestamp(started_at)
+    if start is None or start.year < 1970 or start > now:
+        errors["logs"] = "current container start timestamp unavailable or invalid"
+        return []
+    cutoff = max(start, now - timedelta(seconds=max_age_seconds))
     result = docker_run(
-        ["docker", "logs", "--tail", "20", container_name],
+        ["docker", "logs", "--timestamps", "--since", cutoff.isoformat(), "--tail", "20", container_name],
         check=False,
         capture_output=True,
         text=True,
     )
     if result.returncode != 0:
+        errors["logs"] = "Docker logs unavailable"
         return []
-    return [line[:1000] for line in (result.stdout + result.stderr).splitlines() if line][-20:]
+    logs = []
+    for line in (result.stdout + "\n" + result.stderr).splitlines():
+        stamp, separator, message = line.partition(" ")
+        timestamp = parse_timestamp(stamp)
+        if timestamp is not None and cutoff <= timestamp <= now and separator:
+            logs.append((timestamp, message[:1000]))
+        elif line:
+            errors["logs_filtered"] = "discarded undated, stale, pre-start, or future log entries"
+    return [message for _, message in sorted(logs, key=lambda item: item[0])[-20:]]
 
 
 def detect_error_patterns(logs: list[str]) -> list[str]:
@@ -192,12 +247,15 @@ def collect_cpu_percent(container_name: str) -> float | None:
         return None
     try:
         payload = json.loads(result.stdout)
-        return float(str(payload.get("CPUPerc", "")).strip().rstrip("%"))
-    except (TypeError, ValueError, json.JSONDecodeError):
+        value = float(str(payload.get("CPUPerc", "")).strip().rstrip("%"))
+        return value if math.isfinite(value) and value >= 0 else None
+    except (AttributeError, TypeError, ValueError, json.JSONDecodeError):
         return None
 
 
 def collect_disk_usage_percent(container_name: str, path: str) -> float | None:
+    if not isinstance(path, str) or not path.startswith("/") or len(path) > 1024 or "\x00" in path:
+        return None
     result = docker_run(
         ["docker", "exec", container_name, "df", "-P", "--", path],
         check=False,
@@ -207,10 +265,10 @@ def collect_disk_usage_percent(container_name: str, path: str) -> float | None:
     if result.returncode != 0:
         return None
     lines = result.stdout.splitlines()
-    value = lines[-1].split()[-2].rstrip("%") if len(lines) >= 2 else ""
     try:
-        return float(value)
-    except ValueError:
+        value = float(lines[-1].split()[-2].rstrip("%")) if len(lines) >= 2 else None
+        return value if value is not None and math.isfinite(value) and 0 <= value <= 100 else None
+    except (ValueError, IndexError):
         return None
 
 
@@ -224,9 +282,11 @@ def collect_dependency_status(dependency_name: str | None) -> str | None:
         text=True,
     )
     if result.returncode != 0:
-        return "missing"
+        return "unknown"
     try:
         state = json.loads(result.stdout)[0].get("State", {})
-    except (json.JSONDecodeError, IndexError):
+    except (json.JSONDecodeError, IndexError, TypeError, AttributeError, KeyError):
         return "unknown"
-    return "running" if state.get("Running") else "down"
+    if not isinstance(state, dict) or type(state.get("Running")) is not bool:
+        return "unknown"
+    return "running" if state["Running"] else "down"

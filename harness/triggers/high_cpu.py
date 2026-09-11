@@ -100,6 +100,8 @@ class ContainerHighCPUTrigger(Trigger):
         self._trace = {
             "incident_type": self.incident_type, "cpu_percent": value if _finite(value) else None,
             "running": snapshot.running, "threshold": self.threshold,
+            "cpu_quota": snapshot.cpu_quota, "cpu_period": snapshot.cpu_period,
+            "nano_cpus": snapshot.nano_cpus,
             "window_seconds": self.config.cpu_window_seconds,
             "minimum_samples": self.config.cpu_min_samples,
             "max_gap_seconds": self.config.cpu_max_gap_seconds,

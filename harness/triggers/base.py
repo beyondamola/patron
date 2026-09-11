@@ -55,6 +55,7 @@ class TriggerRegistry:
             trace = trigger.trace(snapshot)
             trace["priority"] = priority
             trace["selected"] = packet is None and trace["result"]
+            trace["probe_errors"] = snapshot.probe_errors or {}
             traces.append(trace)
             if packet is None and trace["result"]:
                 packet = trigger.build_packet(snapshot)

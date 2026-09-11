@@ -153,3 +153,25 @@ def test_cli_validates_config_before_collecting(tmp_path, capsys):
     path.write_text('{"cpu_min_samples": 0}')
     assert main(["inspect-docker", "--config", str(path)]) == 1
     assert "cpu_min_samples" in capsys.readouterr().err
+
+
+def test_collection_failure_breaks_window_without_resolving_incidents(tmp_path):
+    from unittest.mock import Mock
+    from harness.audit import AuditLogger
+    from harness.incident import IncidentRegistry
+    from harness.runtime import PatronRuntime
+
+    s = Samples()
+    collector = Mock()
+    runtime = PatronRuntime(collector=collector,
+        registry=IncidentRegistry(tmp_path / "state.json"),
+        audit_logger=AuditLogger(tmp_path / "audit.jsonl"),
+        triggers=TriggerRegistry([s.trigger]))
+    for stamp in (0, 5):
+        collector.collect.return_value = s.sample(stamp)
+        assert not runtime.process_once()["triggered"]
+    collector.collect.return_value = replace(s.sample(6), exists=False, status="inspect_failed")
+    assert runtime.process_once()["error"] == "inspect_failed"
+    collector.collect.return_value = s.sample(10)
+    assert not runtime.process_once()["triggered"]
+    assert s.trigger.trace(collector.collect.return_value)["sample_count"] == 1

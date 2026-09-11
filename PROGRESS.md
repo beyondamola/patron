@@ -200,3 +200,29 @@ and create a linked new incident only if a later collection still detects failur
 - Remaining G3: timestamp/start-bounded logs, dependency/probe unknown semantics,
   quota reporting, labeled corpus with denominators, full eight-scenario and
   operator regression runs, normal run-all, and Linux CI evidence.
+
+## G3 evidence-quality checkpoint (2026-09-11)
+
+- DET-4: Docker logs are timestamped, restricted to the current StartedAt and a
+  configurable 60-second TTL, independently filtered, sorted, and bounded to
+  twenty 1000-character messages. Unknown starts yield unknown log evidence.
+  Added Python 3.9 normalization for Docker nanosecond timestamps after a unit
+  test exposed the incompatibility; undated stderr is not accepted as evidence.
+- Failed or malformed dependency inspect now returns unknown, not down/missing.
+  Down requires a typed Running=false observation, or separately collected
+  recent dependency-error logs. CPU/disk malformed and nonfinite metrics stay
+  null. Disk paths are bounded absolute argv values, never shell interpolation.
+- Normalized snapshots and planner context expose CpuQuota, CpuPeriod, NanoCpus,
+  StartedAt, and per-probe error explanations. Enrichment targets immutable
+  container ID; terminal refresh discards logs if StartedAt changed meanwhile.
+- DET-3: failed collection now reaches trigger evaluation before the runtime
+  returns a collection error, breaking pending windows without resolving any
+  incident. Added a runtime-level regression test for that boundary.
+- Unit result: python3 -m pytest -q -> 177 passed, 9 opt-in skipped, 1.20s.
+- Real Docker result: PATRON_RUN_DOCKER_INTEGRATION=1 python3 -m pytest
+  -m integration -q --junitxml=artifacts/raw/g3-evidence-suite.xml -> all 8 passed,
+  177 deselected, 66.07s. This includes sustained CPU and current-start log
+  filtering in real containers. These tests verify independent classification,
+  policy, final status, graceful child shutdown, and scenario-owned cleanup.
+- G3 is still incomplete: labeled corpus/denominator report, operator regression,
+  normal CLI run-all, and Linux qualification are required. G4/G5 remain open.

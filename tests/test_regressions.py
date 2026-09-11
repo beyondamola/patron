@@ -56,8 +56,10 @@ def test_disk_path_is_not_shell_code(monkeypatch):
 
 
 def test_stderr_application_logs_are_collected(monkeypatch):
-    monkeypatch.setattr("harness.collector.docker_run", Mock(return_value=Mock(returncode=0, stdout="", stderr="CONFIG_ERROR invalid config\n")))
-    assert collect_recent_logs("x") == ["CONFIG_ERROR invalid config"]
+    from datetime import datetime, timezone
+    stamp = datetime.now(timezone.utc).isoformat()
+    monkeypatch.setattr("harness.collector.docker_run", Mock(return_value=Mock(returncode=0, stdout="", stderr=f"{stamp} CONFIG_ERROR invalid config\n")))
+    assert collect_recent_logs("x", started_at=stamp) == ["CONFIG_ERROR invalid config"]
 
 
 def test_network_cleanup_refuses_unrelated_network():
