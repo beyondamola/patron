@@ -497,6 +497,24 @@ This is still G4 work in progress: the checked-in replay corpus, counterfactual
 comparisons, fake shadow evaluation, and full live/CI replay qualification remain
 pending. Unsupported event sequences fail rather than claim a matching replay.
 
+Offline comparison is available:
+
+```bash
+python -m harness replay compare capture.jsonl \
+  --baseline-config baseline.json --candidate-config candidate.json \
+  --fake-candidate mirror --output comparison.json
+```
+
+Fake modes are `mirror`, `escalate`, and `malformed`. Reports contain per-type
+sample denominators, classification/action/policy differences, and malformed
+recommendations. Differences return a nonzero exit code. Outputs must be new
+files. No executor or live incident registry is used. After a changed decision,
+downstream outcome evidence is `counterfactual_unknown`; candidate final status
+is never inferred from a recorded restart. Changed measurement paths,
+dependencies, or log-evidence TTL require a new capture and cannot reuse old
+measurements. See `SHADOW_EVALUATION.md` for scope and the separate approval gate
+for any future real planner evaluation.
+
 `harness run`, `harness watch`, `harness inspect-docker`, `scenarios run`, and
 `scenarios run-all` accept `--config path/to/detectors.json`. Omitted settings
 use validated defaults. For example:

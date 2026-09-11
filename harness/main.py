@@ -129,6 +129,12 @@ def build_parser() -> argparse.ArgumentParser:
     replay_run = replay_commands.add_parser("run", help="reproduce recorded decisions with execution disabled")
     replay_run.add_argument("capture_path")
     replay_run.add_argument("--output", required=True)
+    compare = replay_commands.add_parser("compare", help="compare offline detector/planner recommendations")
+    compare.add_argument("capture_path")
+    compare.add_argument("--baseline-config", required=True)
+    compare.add_argument("--candidate-config", required=True)
+    compare.add_argument("--fake-candidate", choices=("mirror", "escalate", "malformed"), default="mirror")
+    compare.add_argument("--output", required=True)
     return parser
 
 
@@ -143,6 +149,21 @@ def main(argv: list[str] | None = None) -> int:
 def _main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     if args.command == "replay":
+        if args.replay_command == "compare":
+            from pathlib import Path
+            from .comparison import compare_capture
+            from .shadow import FakeCandidate
+            output = Path(args.output)
+            sources = (args.capture_path, args.baseline_config, args.candidate_config)
+            if output.resolve() in {Path(source).resolve() for source in sources}:
+                raise ValueError("comparison output must not overwrite an input")
+            report = compare_capture(args.capture_path, DetectorConfig.load(args.baseline_config),
+                DetectorConfig.load(args.candidate_config), FakeCandidate(args.fake_candidate))
+            output.parent.mkdir(parents=True, exist_ok=True)
+            with output.open("x", encoding="utf-8") as handle:
+                handle.write(json.dumps(report, indent=2, sort_keys=True, allow_nan=False) + "\n")
+            print(json.dumps({"regressions": report["regressions"], "malformed_plans": report["malformed_plans"]}))
+            return int(bool(report["regressions"]))
         if args.replay_command == "run":
             from pathlib import Path
             from .replay import replay_capture

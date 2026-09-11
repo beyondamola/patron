@@ -381,3 +381,27 @@ and create a linked new incident only if a later collection still detects failur
 - Remaining G4: committed sanitized replay files/origin metadata, comparison
   reports and non-executing fake shadow contract, negative/restart corpus, full
   all-eight live capture/replay and CI verification. G5 remains open.
+
+## G4 comparison and fake shadow checkpoint (2026-09-11)
+
+- Added comparison.py fixed-observation detector/planner/policy comparison and
+  shadow.py bounded candidate protocol with mirror/escalate/malformed fakes.
+  Candidate context is deep-copied; malformed schema is denied, and allowlist
+  policy uses the original context. No executor/state runtime is used by compare.
+- Reports include per-type classification denominators, missed/extra observations,
+  action/policy differences, malformed counts, recorded attempts/final statuses,
+  and explicit counterfactual_unknown after any candidate divergence. Candidate
+  lifecycle final status remains null, never inherited from recorded recovery.
+- Measurement path/dependency/log-TTL changes are rejected because the required
+  new measurements were not captured. Threshold/window comparisons remain valid
+  fixed-observation experiments, not candidate recovery simulations.
+- CLI replay compare writes a new JSON report and exits nonzero on differences.
+  Real unhealthy capture 9302b516-728c-4cb9-9627-1657c0e1567b: mirror had 0
+  regressions (exit 0); fake escalation had 1 (exit 1). Reports are
+  artifacts/raw/g4-comparison-mirror.json and g4-comparison-escalate.json.
+- Unit result: 238 passed, 9 opt-in skipped, 1.39s. Tests cover isolation,
+  deterministic reports, malformed/confidence bounds, context mutation, policy
+  denial, unknown counterfactual outcomes, and unsupported measurement changes.
+- Added SHADOW_EVALUATION.md template and real-provider authorization gate.
+  G4 remains incomplete: committed replay corpus, richer metrics/timing reports,
+  all-eight live capture/replay CI, and full acceptance review remain required.
