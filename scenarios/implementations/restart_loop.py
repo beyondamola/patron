@@ -79,7 +79,7 @@ class RestartLoopScenario(Scenario):
             context.docker.remove_container(context.target_container)
 
     def failure_confirmed(self, context: ScenarioContext) -> bool:
-        return restart_threshold_crossed(context.docker.inspect(context.target_container), self.restart_threshold)
+        return restart_threshold_crossed(context.docker.inspect(context.target_container), context.detector_config.restart_loop_threshold)
 
     def expected_failure(self) -> str:
         return f"restart_count>={self.restart_threshold}"

@@ -88,6 +88,6 @@ def test_terminal_inspection_refreshes_delayed_oom_evidence(monkeypatch):
     run = Mock(side_effect=[Mock(returncode=0, stdout=json.dumps([payload])),
                             Mock(returncode=0, stdout=json.dumps([final]))])
     monkeypatch.setattr("harness.collector.docker_run", run)
-    monkeypatch.setattr("harness.collector.enrich_snapshot", lambda name, snapshot: snapshot)
+    monkeypatch.setattr("harness.collector.enrich_snapshot", lambda name, snapshot, **kwargs: snapshot)
     assert DockerCollector("target").collect().oom_killed
     assert run.call_args.args[0] == ["docker", "inspect", "container-id"]

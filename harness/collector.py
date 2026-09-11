@@ -2,9 +2,12 @@ from __future__ import annotations
 
 import json
 import subprocess
+import time
 from abc import ABC, abstractmethod
 from dataclasses import asdict, dataclass, replace
 from typing import Any
+
+from .config import DetectorConfig
 
 
 def docker_run(args, **kwargs):
@@ -38,6 +41,7 @@ class ContainerSnapshot:
     ports: list[str] | None = None
     network_mode: str | None = None
     dependency_status: str | None = None
+    observed_monotonic: float | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -52,8 +56,9 @@ class Collector(ABC):
 class DockerCollector(Collector):
     """Collects container state from the local Docker daemon."""
 
-    def __init__(self, container_name: str = "mvp-nginx") -> None:
+    def __init__(self, container_name: str = "mvp-nginx", *, config: DetectorConfig | None = None) -> None:
         self.container_name = container_name
+        self.config = config or DetectorConfig()
 
     def collect(self) -> ContainerSnapshot:
         try:
@@ -83,7 +88,7 @@ class DockerCollector(Collector):
             )
 
         snapshot = snapshot_from_docker_inspect(self.container_name, json.loads(result.stdout)[0])
-        enriched = enrich_snapshot(self.container_name, snapshot)
+        enriched = enrich_snapshot(self.container_name, snapshot, config=self.config)
         # Logs/stats take time; do not act on an exit snapshot taken before OOM metadata settled.
         if not snapshot.running and not snapshot.oom_killed and snapshot.container_id:
             latest = docker_run(["docker", "inspect", snapshot.container_id],
@@ -94,8 +99,8 @@ class DockerCollector(Collector):
             confirmed = snapshot_from_docker_inspect(self.container_name, json.loads(latest.stdout)[0])
             return replace(confirmed, recent_logs=enriched.recent_logs, error_patterns=enriched.error_patterns,
                            cpu_percent=enriched.cpu_percent, disk_usage_percent=enriched.disk_usage_percent,
-                           dependency_status=enriched.dependency_status)
-        return enriched
+                           dependency_status=enriched.dependency_status, observed_monotonic=time.monotonic())
+        return replace(enriched, observed_monotonic=time.monotonic())
 
 
 def snapshot_from_docker_inspect(container_name: str, payload: dict[str, Any]) -> ContainerSnapshot:
@@ -131,14 +136,15 @@ def snapshot_from_docker_inspect(container_name: str, payload: dict[str, Any]) -
     )
 
 
-def enrich_snapshot(container_name: str, snapshot: ContainerSnapshot) -> ContainerSnapshot:
+def enrich_snapshot(container_name: str, snapshot: ContainerSnapshot, *, config: DetectorConfig | None = None) -> ContainerSnapshot:
+    config = config or DetectorConfig()
     if not snapshot.exists:
         return snapshot
     logs = collect_recent_logs(container_name)
     patterns = detect_error_patterns(logs)
     cpu = collect_cpu_percent(container_name)
-    disk = collect_disk_usage_percent(container_name, (snapshot.labels or {}).get("patron.disk_path", "/tmp"))
-    dependency_status = collect_dependency_status((snapshot.labels or {}).get("patron.dependency"))
+    disk = collect_disk_usage_percent(container_name, config.disk_path or (snapshot.labels or {}).get("patron.disk_path", "/tmp"))
+    dependency_status = collect_dependency_status(config.dependency or (snapshot.labels or {}).get("patron.dependency"))
     return ContainerSnapshot(
         **{
             **snapshot.to_dict(),

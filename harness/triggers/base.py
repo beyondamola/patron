@@ -46,16 +46,15 @@ class TriggerRegistry:
         self.triggers.append(trigger)
 
     def evaluate(self, snapshot: ContainerSnapshot) -> dict[str, Any] | None:
-        for trigger in self.triggers:
-            if trigger.evaluate(snapshot):
-                return trigger.build_packet(snapshot)
-        return None
+        return self.evaluate_with_trace(snapshot)[0]
 
     def evaluate_with_trace(self, snapshot: ContainerSnapshot) -> tuple[dict[str, Any] | None, list[dict[str, Any]]]:
         traces = []
         packet = None
-        for trigger in self.triggers:
+        for priority, trigger in enumerate(self.triggers):
             trace = trigger.trace(snapshot)
+            trace["priority"] = priority
+            trace["selected"] = packet is None and trace["result"]
             traces.append(trace)
             if packet is None and trace["result"]:
                 packet = trigger.build_packet(snapshot)

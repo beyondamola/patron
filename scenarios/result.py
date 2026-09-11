@@ -39,6 +39,8 @@ class ScenarioResult:
     classification_correct: bool | None = None
     policy_correct: bool | None = None
     final_status_correct: bool | None = None
+    detector_config: dict | None = None
+    detector_config_fingerprint: str | None = None
 
     def to_dict(self) -> dict:
         return asdict(self)

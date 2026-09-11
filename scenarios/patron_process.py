@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 import signal
+import json
 import os
 import subprocess
 import sys
 import time
 from pathlib import Path
+
+from harness.config import DetectorConfig
 
 
 class ManagedPatron:
@@ -16,13 +19,17 @@ class ManagedPatron:
         interval: int = 1,
         trace: bool = False,
         log_root: Path | str = "logs/scenarios",
+        config: DetectorConfig | None = None,
     ) -> None:
         self.target = target
         self.scenario_id = scenario_id
         self.interval = interval
         self.trace = trace
+        self.config = config or DetectorConfig()
+        self.config.validate_interval(interval)
         self.log_dir = Path(log_root) / scenario_id
         self.log_path = self.log_dir / "patron.log"
+        self.config_path = self.log_dir / "detectors.json"
         self.process: subprocess.Popen | None = None
         self._log_handle = None
 
@@ -38,6 +45,8 @@ class ManagedPatron:
             "--interval",
             str(self.interval),
             "--verbose",
+            "--config",
+            str(self.config_path.resolve()),
         ]
         if self.trace:
             command.append("--trace")
@@ -45,6 +54,7 @@ class ManagedPatron:
 
     def start(self) -> None:
         self.log_dir.mkdir(parents=True, exist_ok=True)
+        self.config_path.write_text(json.dumps(self.config.to_dict(), sort_keys=True), encoding="utf-8")
         self._log_handle = self.log_path.open("w", encoding="utf-8")
         self.process = subprocess.Popen(
             self.command(),

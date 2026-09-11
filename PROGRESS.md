@@ -175,3 +175,28 @@ and create a linked new incident only if a later collection still detects failur
   networks, or remaining Python Patron processes were found afterward.
 - G2 is verified. G3 sustained detection/configuration/negative corpus is next;
   G4 replay and G5 final qualification remain unimplemented.
+
+## G3 implementation checkpoint (2026-09-11)
+
+- DET-1/2/3/5 partial: added validated DetectorConfig, stable fingerprint, CLI
+  --config for run/watch/inspect and scenario run/run-all, managed child config
+  files, audit/result settings, and explicit registry priority/selection traces.
+- CPU now requires >=3 high samples spanning >=10 seconds; maximum gap is 15
+  seconds. Recovery evidence requires >=2 readings <=60 spanning >=5 seconds.
+  Tests cover missing/nonfinite values, bursts, duplicate/out-of-order/stale
+  timestamps, gaps, counter resets, container replacement, and fresh runtime
+  windows. Hysteresis does not modify terminal incident suppression.
+- All registered triggers evaluate each observation even when a higher-priority
+  predicate wins, so stateful windows do not freeze behind another predicate.
+- Poll intervals at or above the maximum sample gap are rejected before watch.
+  Collection time also counts toward the gap; slow probes break windows rather
+  than manufacturing continuous evidence.
+- Unit command: python3 -m pytest -q -> 149 passed, 9 opt-in skipped, 0.88s.
+- Real Docker command: PATRON_RUN_DOCKER_INTEGRATION=1 python3 -m pytest
+  -m integration -k high_cpu -q --junitxml=artifacts/raw/g3-cpu-initial.xml
+  -> 1 passed, 157 deselected, 21.14s. Test asserts classification, escalation,
+  policy, shutdown, and scenario-owned resource cleanup. This is a focused live
+  result, not full G3 qualification or a new CI result.
+- Remaining G3: timestamp/start-bounded logs, dependency/probe unknown semantics,
+  quota reporting, labeled corpus with denominators, full eight-scenario and
+  operator regression runs, normal run-all, and Linux CI evidence.

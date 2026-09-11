@@ -112,7 +112,7 @@ def test_new_resource_triggers_match_expected_metrics() -> None:
     assert ContainerOOMKilledTrigger().evaluate(
         ContainerSnapshot("x", True, False, "exited", {}, oom_killed=True)
     )
-    assert ContainerHighCPUTrigger().evaluate(
+    assert not ContainerHighCPUTrigger().evaluate(
         ContainerSnapshot("x", True, True, "running", {}, cpu_percent=90.0)
     )
     assert ContainerDiskFullTrigger().evaluate(

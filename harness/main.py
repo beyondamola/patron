@@ -7,6 +7,7 @@ import getpass
 import math
 
 from .collector import DockerCollector
+from .config import DetectorConfig
 from .runtime import PatronRuntime
 from .incident import IncidentRegistry
 from .storage import StateConflict
@@ -33,6 +34,7 @@ def run(
     verbose: bool = False,
     trace: bool = False,
     state_path: str | None = None,
+    config: DetectorConfig | None = None,
 ) -> int:
     result = PatronRuntime(
         container_name=container_name,
@@ -40,6 +42,7 @@ def run(
         verbose=verbose,
         trace=trace,
         registry=IncidentRegistry(state_path),
+        config=config,
     ).process_once()
     if not result.get("triggered"):
         if result.get("error"):
@@ -90,6 +93,8 @@ def build_parser() -> argparse.ArgumentParser:
 
     inspect_parser = subparsers.add_parser("inspect-docker", help="print normalized Docker state")
     inspect_parser.add_argument("--target", "--container", dest="container", default="mvp-nginx")
+    for command in (run_parser, watch_parser, inspect_parser):
+        command.add_argument("--config", help="validated detector settings JSON file")
     incident_parser = subparsers.add_parser("incidents", help="inspect and control incident suppression")
     commands = incident_parser.add_subparsers(dest="incident_command", required=True)
     for name in ("list", "show", "acknowledge", "rearm"):
@@ -137,6 +142,7 @@ def _main(argv: list[str] | None = None) -> int:
         payload["state_path"] = str(registry.state_path)
         print(json.dumps(payload, indent=None if args.json else 2, sort_keys=True))
         return 0 if payload.get("status") not in {"REJECTED", "PENDING", "PENDING_AUDIT"} else 1
+    config = DetectorConfig.load(args.config) if args.config else DetectorConfig()
     if args.command == "run":
         return run(
             container_name=args.container,
@@ -144,6 +150,7 @@ def _main(argv: list[str] | None = None) -> int:
             verbose=args.verbose,
             trace=args.trace,
             state_path=args.state_path,
+            config=config,
         )
     if args.command == "watch":
         return PatronRuntime(
@@ -152,9 +159,10 @@ def _main(argv: list[str] | None = None) -> int:
             verbose=args.verbose,
             trace=args.trace,
             registry=IncidentRegistry(args.state_path),
+            config=config,
         ).watch(interval=args.interval)
     if args.command == "inspect-docker":
-        snapshot = DockerCollector(args.container).collect()
+        snapshot = DockerCollector(args.container, config=config).collect()
         payload = {
             "name": snapshot.name,
             "id": snapshot.container_id,

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import shlex
 from pathlib import Path
 
 from .base import InjectionResult, ObservationResult, Scenario, ScenarioContext
@@ -34,6 +35,7 @@ def run_scenario(
     patron: ManagedPatron | None = None
 
     try:
+        context.detector_config.validate_interval(context.patron_interval)
         context.narrate(f"Creating isolated resources for scenario: {scenario.name}")
         scenario.create_environment(context)
         context.narrate("Confirming healthy baseline")
@@ -48,16 +50,21 @@ def run_scenario(
                 scenario_id=context.scenario_id,
                 interval=context.patron_interval,
                 trace=context.trace,
+                config=context.detector_config,
             )
             patron.start()
             if not patron.wait_ready():
                 raise RuntimeError(f"Patron runtime did not become ready; see {patron.log_path}")
             context.narrate(f"Patron runtime ready; output={patron.log_path}")
         else:
+            config_path = Path("logs/scenarios") / context.scenario_id / "detectors.json"
+            config_path.parent.mkdir(parents=True, exist_ok=True)
+            config_path.write_text(json.dumps(context.detector_config.to_dict(), sort_keys=True), encoding="utf-8")
             command = (
                 "python -m harness watch "
-                f"--target {context.target_container} "
-                f"--interval {context.patron_interval} --verbose --trace"
+                f"--target {shlex.quote(context.target_container)} "
+                f"--interval {context.patron_interval} --verbose --trace "
+                f"--config {shlex.quote(str(config_path.resolve()))}"
             )
             print(f"External Patron mode. Start this command now: {command}", flush=True)
 
@@ -155,6 +162,8 @@ def build_result(
         scenario_id=context.scenario_id,
         scenario_name=context.scenario_name,
         target=context.target_container,
+        detector_config=context.detector_config.to_dict(),
+        detector_config_fingerprint=context.detector_config.fingerprint,
         status=status,
         failure_injected=injection.injected,
         failure_observed=injection.observed,

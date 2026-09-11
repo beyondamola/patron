@@ -3,6 +3,8 @@ from __future__ import annotations
 import argparse
 import sys
 
+from harness.config import DetectorConfig
+
 from .base import ScenarioContext
 from .docker_utils import DockerClient, DockerError
 from .registry import default_registry, scenario_support_line
@@ -45,6 +47,8 @@ def build_parser() -> argparse.ArgumentParser:
     run_all_parser.add_argument("--stop-on-failure", action="store_true")
     run_all_parser.add_argument("--keep-resources", action="store_true")
     run_all_parser.add_argument("--reset-simulation-state", action="store_true")
+    for command in (run_parser, run_all_parser):
+        command.add_argument("--config", help="shared detector settings JSON file")
 
     cleanup_parser = subparsers.add_parser("cleanup", help="remove Patron simulation resources")
     cleanup_parser.add_argument("--verbose", action="store_true")
@@ -80,6 +84,11 @@ def main(argv: list[str] | None = None) -> int:
         print(f"Removed {len(removed)} Patron simulation container(s).")
         return 0
 
+    try:
+        config = DetectorConfig.load(args.config) if args.config else DetectorConfig()
+        config.validate_interval(args.patron_interval)
+    except (ValueError, OSError) as exc:
+        parser.error(str(exc))
     if args.command == "run":
         try:
             scenario = registry.get(args.scenario)
@@ -97,6 +106,7 @@ def main(argv: list[str] | None = None) -> int:
             start_patron=not args.external_patron,
             patron_interval=args.patron_interval,
             reset_simulation_state=args.reset_simulation_state,
+            detector_config=config,
         )
         result = run_scenario(scenario, context)
         print(result.to_json())
@@ -116,6 +126,7 @@ def main(argv: list[str] | None = None) -> int:
                 start_patron=not args.external_patron,
                 patron_interval=args.patron_interval,
                 reset_simulation_state=args.reset_simulation_state,
+                detector_config=config,
             )
             result = run_scenario(scenario, context)
             results.append(result)

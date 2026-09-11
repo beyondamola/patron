@@ -105,7 +105,7 @@ class HighCPUScenario(Scenario):
     @staticmethod
     def failure_confirmed(context: ScenarioContext) -> bool:
         cpu = context.docker.cpu_percent(context.target_container)
-        return bool(cpu is not None and cpu >= 80.0)
+        return bool(cpu is not None and cpu >= context.detector_config.cpu_threshold)
 
 
 class DiskFullScenario(Scenario):

@@ -6,6 +6,7 @@ from typing import Any
 
 from .audit import AuditLogger
 from .collector import Collector, DockerCollector
+from .config import DetectorConfig
 from .context_manager import build_context
 from .control import IncidentControl
 from .executor import DockerExecutor
@@ -32,21 +33,25 @@ class PatronRuntime:
         audit_logger: AuditLogger | None = None,
         verifier=verify_incident,
         triggers: TriggerRegistry | None = None,
+        config: DetectorConfig | None = None,
     ) -> None:
         self.container_name = container_name
         self.dry_run = dry_run
         self.verbose = verbose
         self.trace = trace
-        self.collector = collector or DockerCollector(container_name)
+        self.config = config or DetectorConfig()
+        self.collector = collector or DockerCollector(container_name, config=self.config)
         self.registry = registry or IncidentRegistry()
         self.audit_logger = audit_logger or AuditLogger(self.registry.audit_path or "logs/incidents.jsonl")
         self.registry.audit_path = str(self.audit_logger.path.resolve())
         self.planner = RulePlanner()
         self.executor = DockerExecutor()
         self.verifier = verifier
-        self.triggers = triggers or default_trigger_registry()
+        self.triggers = triggers or default_trigger_registry(config=self.config)
 
     def process_once(self) -> dict[str, Any]:
+        trace_packet("detector configuration", {"settings": self.config.to_dict(),
+                     "fingerprint": self.config.fingerprint}, self.trace)
         with self.registry.lock.acquire():
             self.registry.check_revision()
             IncidentControl(self.registry, self.audit_logger).process_pending()
@@ -248,6 +253,7 @@ class PatronRuntime:
         return {"triggered": True, "incident": incident.to_dict(), "audit": record}
 
     def watch(self, interval: int = 10) -> int:
+        self.config.validate_interval(interval)
         with self.registry.lock.acquire():
             self.registry.check_revision()
             return self._watch_owned(interval)
@@ -289,6 +295,8 @@ class PatronRuntime:
     ) -> dict[str, Any]:
         return {
             "schema_version": 1,
+            "detector_config": self.config.to_dict(),
+            "detector_config_fingerprint": self.config.fingerprint,
             "event": "incident_snapshot",
             "state_path": str(self.registry.state_path),
             "incident": incident.to_dict(),

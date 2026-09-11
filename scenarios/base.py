@@ -6,6 +6,8 @@ from datetime import datetime, timezone
 from typing import Any
 from uuid import uuid4
 
+from harness.config import DetectorConfig
+
 from .docker_utils import DockerClient, simulation_labels
 
 
@@ -28,6 +30,7 @@ class ScenarioContext:
     scenario_id: str = field(default_factory=lambda: str(uuid4()))
     started_at: str = field(default_factory=utc_now)
     docker: DockerClient = field(default_factory=DockerClient)
+    detector_config: DetectorConfig = field(default_factory=DetectorConfig)
 
     @property
     def labels(self) -> dict[str, str]:

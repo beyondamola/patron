@@ -456,3 +456,40 @@ This remains a local, single-target MVP. Resource statistics are sampled once pe
 ## Non-Goals
 
 This project does not include Kubernetes, Ansible, web UI, database, cloud deployment, authentication, billing, multi-agent orchestration, random chaos testing, production-target support, or unrestricted shell-command execution.
+# Detector Configuration
+
+`harness run`, `harness watch`, `harness inspect-docker`, `scenarios run`, and
+`scenarios run-all` accept `--config path/to/detectors.json`. Omitted settings
+use validated defaults. For example:
+
+```json
+{
+  "cpu_threshold": 80,
+  "cpu_window_seconds": 10,
+  "cpu_min_samples": 3,
+  "cpu_max_gap_seconds": 15,
+  "cpu_recovery_threshold": 60,
+  "cpu_recovery_seconds": 5,
+  "cpu_recovery_samples": 2,
+  "restart_loop_threshold": 3,
+  "disk_threshold": 90
+}
+```
+
+CPU detection requires consecutive valid samples meeting both the count and
+duration requirements. At the default ten-second polling interval, three
+samples span at least twenty seconds, plus collection time. A one-shot `run`
+does not establish a sustained CPU window. Missing readings, stale samples,
+excessive gaps, and replacement containers reset unconfirmed evidence. CPU
+percent uses Docker's one-logical-CPU denominator, not total host utilization.
+Recovery hysteresis does not rearm an escalated incident.
+
+The polling interval must be below `cpu_max_gap_seconds`, leaving room for
+collection duration. For `--interval 30`, explicitly configure a larger gap.
+Slow collection can still break the window; trace output reports its coverage
+and sample count. Invalid or nonfinite settings fail at startup.
+
+Managed scenarios write their exact settings to
+`logs/scenarios/<scenario-id>/detectors.json` and pass that file to Patron.
+External mode prints a command referencing the same file. Audit and scenario
+results include the effective settings and a SHA-256 configuration fingerprint.
