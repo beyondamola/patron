@@ -226,3 +226,30 @@ and create a linked new incident only if a later collection still detects failur
   policy, final status, graceful child shutdown, and scenario-owned cleanup.
 - G3 is still incomplete: labeled corpus/denominator report, operator regression,
   normal CLI run-all, and Linux qualification are required. G4/G5 remain open.
+
+## G3 corpus and qualification checkpoint (2026-09-11)
+
+- Added 26 explicitly labeled synthetic cases / 53 observation decisions in
+  tests/fixtures/detectors.json. Corpus covers all eight types, priority,
+  CPU boundaries/bursts/missing/NaN/stale/duplicates/out-of-order/gaps,
+  generation replacement and runtime restart, absent health checks, normalized
+  filtered config evidence, unknown dependencies, and disk boundaries.
+- python3 -m ci.detector_corpus reports zero false positives and false negatives
+  per type. CPU has 2 positive/51 negative samples; each other type has 1
+  positive/52 negative samples. These are synthetic sample-level denominators,
+  not independent real incidents or estimates of deployment accuracy.
+- Evaluator calls only trigger/context/rule-planner/policy logic, not executor
+  or live collector. Unit I/O guard remains active. Deliberately wrong labels
+  produce regressions. CI now retains the full denominator/trace report.
+- Unit suite: 179 passed, 9 opt-in skipped, 0.71s.
+- Live operator test: 1 passed, 187 deselected, 12.31s; report
+  artifacts/raw/g3-operator.xml.
+- Normal python3 -m scenarios run-all --verbose: all eight PASSED, approximately
+  63 seconds (06:10:13-06:11:16 UTC). Scenarios list reports all eight supported
+  when run with Docker access; the filesystem sandbox alone cannot reach Docker.
+- Pushed 13dc0f4, including prior detector commits. CI qualification run:
+  https://github.com/beyondamola/patron/actions/runs/34568818075
+  Unit Python 3.9/3.12 lanes passed; Docker lanes were still running at the last
+  check. Resume this existing run, do not dispatch a replacement.
+- G3 remains open pending CI artifacts and requirement-by-requirement review.
+  G4 capture/replay and G5 final qualification are not implemented.
