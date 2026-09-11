@@ -278,3 +278,22 @@ and create a linked new incident only if a later collection still detects failur
   comparison modes, lifecycle fixtures, fake shadow contract, and qualification.
 - G3 report qualifies the pre-groundwork commit 13dc0f4. These G4 changes have
   unit evidence only so far; do not relabel earlier Docker/CI runs as testing them.
+
+## G4 capture primitives and verifier reads (2026-09-11)
+
+- Added optional verifier observation callbacks, clock injection, and explicit
+  health-wait control. Tests record all starting/unhealthy/healthy reads at
+  deterministic offsets, bound unhealthy waiting to eight simulated seconds,
+  reject observation sink failures, and prove escalation invents no Docker read.
+- Added harness/capture.py primitives: private exclusive JSONL creation, fsynced
+  events, schema/run/sequence/time envelope, explicit normalized snapshot fields,
+  relative sample timestamps, bounded/redacted logs, omitted raw inspect/env
+  fields and arbitrary labels. Reader rejects schema/sequence/run discontinuity,
+  nonfinite offsets, missing initial-state envelope, partial final write, absent
+  run_end, and config fingerprint mismatch.
+- These are primitives, not a finished capture or replay feature. Runtime causal
+  hooks, initial-state semantic validation, event/reference validation, full
+  payload schemas, CLI integration, replay adapters, and shadow comparison still
+  remain. No current CLI command is claimed to generate complete captures.
+- Added tests/test_capture.py and tests/test_verifier_observations.py. Full unit
+  suite result recorded at this checkpoint: 195 passed, 9 opt-in skipped.

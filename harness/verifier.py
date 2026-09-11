@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
-import time
 from typing import Any, Callable
 
 from .collector import ContainerSnapshot, DockerCollector
+from .clock import Clock, SystemClock
 
 InspectFn = Callable[[str], ContainerSnapshot]
 
@@ -57,6 +57,10 @@ def verify_incident(
     decision: str,
     inspect_fn: InspectFn | None = None,
     incident_status: str | None = None,
+    *,
+    clock: Clock | None = None,
+    on_observation: Callable[[ContainerSnapshot], None] | None = None,
+    wait_for_health: bool | None = None,
 ) -> VerificationResult:
     if decision == "escalate":
         return VerificationResult(
@@ -68,14 +72,19 @@ def verify_incident(
             restart_count=0,
         )
 
-    live = inspect_fn is None
+    clock = clock or SystemClock()
+    should_wait = inspect_fn is None if wait_for_health is None else wait_for_health
     if inspect_fn is None:
         inspect_fn = lambda name: DockerCollector(name).collect()
     snapshot = inspect_fn(container_name)
-    deadline = time.monotonic() + 8
-    while live and incident_type == "CONTAINER_UNHEALTHY" and snapshot.running and snapshot.health != "healthy" and time.monotonic() < deadline:
-        time.sleep(0.5)
+    if on_observation is not None:
+        on_observation(snapshot)
+    deadline = clock.monotonic() + 8
+    while should_wait and incident_type == "CONTAINER_UNHEALTHY" and snapshot.running and snapshot.health != "healthy" and clock.monotonic() < deadline:
+        clock.sleep(0.5)
         snapshot = inspect_fn(container_name)
+        if on_observation is not None:
+            on_observation(snapshot)
     health = snapshot.health or "none"
 
     if incident_type == "CONTAINER_STOPPED":
