@@ -503,3 +503,9 @@ Failed dependency inspection is unknown, not evidence of a stopped dependency.
 Optional `disk_path` (absolute path) and `dependency` settings override discovery
 labels. Labels remain optional for collection. Disk probes use literal argv,
 and unavailable probes remain null rather than zero utilization.
+
+Run `python -m ci.detector_corpus` for the labeled synthetic detector regression
+report in `artifacts/raw/detector-corpus.json`. It includes per-type positive and
+negative sample counts, false positives/negatives, and full predicate traces.
+These fixtures test classification and planner/policy recommendations only;
+they are not infrastructure recovery evidence or estimates of field accuracy.

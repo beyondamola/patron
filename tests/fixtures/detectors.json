@@ -1,0 +1,32 @@
+{
+  "schema_version": 1,
+  "origin": "Hand-labeled synthetic normalized observations; not Docker captures or prevalence estimates.",
+  "cases": [
+    {"name":"healthy-no-healthcheck","samples":[{"time":0,"expected":null}]},
+    {"name":"healthy-healthcheck","samples":[{"time":0,"state":{"health":"healthy","has_healthcheck":true},"expected":null}]},
+    {"name":"stopped","samples":[{"time":0,"state":{"running":false,"status":"exited"},"expected":"CONTAINER_STOPPED"}]},
+    {"name":"unhealthy","samples":[{"time":0,"state":{"health":"unhealthy","has_healthcheck":true},"expected":"CONTAINER_UNHEALTHY"}]},
+    {"name":"oom-priority","samples":[{"time":0,"state":{"running":false,"status":"exited","oom_killed":true,"restart_count":3},"expected":"CONTAINER_OOM_KILLED"}]},
+    {"name":"restart-priority","samples":[{"time":0,"state":{"running":false,"status":"restarting","restart_count":3,"error_patterns":["bad_config"]},"expected":"CONTAINER_RESTART_LOOP"}]},
+    {"name":"restart-below","samples":[{"time":0,"state":{"running":false,"status":"restarting","restart_count":2},"expected":null}]},
+    {"name":"bad-config-priority","samples":[{"time":0,"state":{"running":false,"status":"exited","error_patterns":["bad_config","dependency_down"]},"expected":"CONTAINER_BAD_CONFIG"}]},
+    {"name":"old-config-filtered","samples":[{"time":0,"state":{"recent_logs":[],"error_patterns":[],"started_at":"2026-09-11T12:00:00Z","probe_errors":{"logs_filtered":"pre-start error discarded"}},"expected":null}]},
+    {"name":"dependency-unknown","samples":[{"time":0,"state":{"dependency_status":"unknown"},"expected":null}]},
+    {"name":"dependency-priority","samples":[{"time":0,"state":{"dependency_status":"down","health":"unhealthy","has_healthcheck":true},"expected":"CONTAINER_DEPENDENCY_DOWN"}]},
+    {"name":"disk-unavailable","samples":[{"time":0,"state":{"disk_usage_percent":null},"expected":null}]},
+    {"name":"disk-below","samples":[{"time":0,"state":{"disk_usage_percent":89.99},"expected":null}]},
+    {"name":"disk-boundary-priority","samples":[{"time":0,"state":{"disk_usage_percent":90,"health":"unhealthy"},"expected":"CONTAINER_DISK_FULL"}]},
+    {"name":"cpu-below","samples":[{"time":0,"state":{"cpu_percent":79.99},"expected":null},{"time":5,"state":{"cpu_percent":79.99},"expected":null},{"time":10,"state":{"cpu_percent":79.99},"expected":null}]},
+    {"name":"cpu-boundary","samples":[{"time":0,"state":{"cpu_percent":80},"expected":null},{"time":5,"state":{"cpu_percent":80},"expected":null},{"time":10,"state":{"cpu_percent":80},"expected":"CONTAINER_HIGH_CPU"}]},
+    {"name":"cpu-above","samples":[{"time":0,"state":{"cpu_percent":90},"expected":null},{"time":10,"state":{"cpu_percent":90},"expected":null},{"time":20,"state":{"cpu_percent":90},"expected":"CONTAINER_HIGH_CPU"}]},
+    {"name":"cpu-burst","samples":[{"time":0,"state":{"cpu_percent":90},"expected":null},{"time":1,"state":{"cpu_percent":90},"expected":null},{"time":2,"state":{"cpu_percent":90},"expected":null},{"time":10,"state":{"cpu_percent":0},"expected":null}]},
+    {"name":"cpu-missing","samples":[{"time":0,"state":{"cpu_percent":90},"expected":null},{"time":5,"state":{"cpu_percent":null},"expected":null},{"time":10,"state":{"cpu_percent":90},"expected":null}]},
+    {"name":"cpu-nan","samples":[{"time":0,"state":{"cpu_percent":90},"expected":null},{"time":5,"invalid_cpu":"nan","expected":null},{"time":10,"state":{"cpu_percent":90},"expected":null}]},
+    {"name":"cpu-duplicate","samples":[{"time":0,"state":{"cpu_percent":90},"expected":null},{"time":5,"state":{"cpu_percent":90},"expected":null},{"time":5,"state":{"cpu_percent":90},"expected":null},{"time":10,"state":{"cpu_percent":90},"expected":null}]},
+    {"name":"cpu-out-of-order","samples":[{"time":0,"state":{"cpu_percent":90},"expected":null},{"time":5,"state":{"cpu_percent":90},"expected":null},{"time":4,"state":{"cpu_percent":90},"expected":null},{"time":10,"state":{"cpu_percent":90},"expected":null}]},
+    {"name":"cpu-stale","samples":[{"time":0,"state":{"cpu_percent":90},"expected":null},{"time":5,"state":{"cpu_percent":90},"expected":null},{"time":30,"state":{"cpu_percent":90,"observed_monotonic":10},"expected":null}]},
+    {"name":"cpu-gap","samples":[{"time":0,"state":{"cpu_percent":90},"expected":null},{"time":5,"state":{"cpu_percent":90},"expected":null},{"time":21,"state":{"cpu_percent":90},"expected":null}]},
+    {"name":"cpu-new-generation","samples":[{"time":0,"state":{"cpu_percent":90},"expected":null},{"time":5,"state":{"cpu_percent":90},"expected":null},{"time":10,"state":{"cpu_percent":90,"container_id":"replacement"},"expected":null}]},
+    {"name":"cpu-runtime-restart","samples":[{"time":0,"state":{"cpu_percent":90},"expected":null},{"time":5,"state":{"cpu_percent":90},"expected":null},{"time":10,"restart_runtime":true,"state":{"cpu_percent":90},"expected":null}]}
+  ]
+}

@@ -22,6 +22,8 @@ jobs:
           python-version: ${{ matrix.python }}
       - run: python -m pip install -r requirements-dev.txt
       - run: python -m pytest -m 'not integration and not operator_integration' --junitxml=artifacts/raw/unit.xml
+      - name: Labeled detector corpus and denominator report
+        run: python -m ci.detector_corpus
       - name: Sanitize evidence
         if: always()
         run: python -m ci.checks artifacts --path artifacts/upload
