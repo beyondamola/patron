@@ -10,6 +10,7 @@ from .capture import read_capture, sanitized
 from .capture_validation import validate_capture
 from .collector import ContainerSnapshot
 from .config import DetectorConfig
+from .control import ControlRequest, IncidentControl
 from .incident import IncidentRegistry
 from .planner import RulePlanner
 from .runtime import PatronRuntime
@@ -194,6 +195,14 @@ def replay_capture(path: str | Path) -> dict:
         runtime.capture = ReplaySink(stream)
         while stream.peek() and stream.peek()["event"] != "run_end":
             stream.clock.advance(stream.expected("cycle_start"))
+            # Materialize recorded requests only in the isolated inbox. The runtime
+            # remains responsible for validation, revision checks, and application.
+            for record in records[stream.index + 1:]:
+                if record["event"] != "control":
+                    break
+                if record["payload"]["phase"] == "requested":
+                    request = ControlRequest(**record["payload"]["request"])
+                    IncidentControl(registry, runtime.audit_logger).submit(request)
             result = runtime.process_once()
             cycles.append({"triggered": result.get("triggered"),
                 "incident_type": (result.get("incident") or {}).get("incident_type"),

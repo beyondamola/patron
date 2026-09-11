@@ -490,9 +490,12 @@ compared at microsecond precision after monotonic-origin conversion.
 
 Use a fresh capture: older captures lacking runtime mode cannot reproduce the
 watch shutdown persistence step and are rejected with a missing-evidence error.
-This is still G4 work in progress: operator-event replay, broader lifecycle
-fixtures, counterfactual comparisons, and fake shadow evaluation are not yet
-qualified. Unsupported event sequences fail rather than claim a matching replay.
+Recorded operator requests are replayed through the normal control inbox in
+the temporary directory. Focused tests cover acknowledgment/rearm, retries,
+suppression, cooldown boundaries, and initial-state restart continuity.
+This is still G4 work in progress: the checked-in replay corpus, counterfactual
+comparisons, fake shadow evaluation, and full live/CI replay qualification remain
+pending. Unsupported event sequences fail rather than claim a matching replay.
 
 `harness run`, `harness watch`, `harness inspect-docker`, `scenarios run`, and
 `scenarios run-all` accept `--config path/to/detectors.json`. Omitted settings

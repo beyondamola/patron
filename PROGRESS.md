@@ -361,3 +361,23 @@ and create a linked new incident only if a later collection still detects failur
 - Still incomplete: operator/control replay, retries/rearm/restart corpus,
   all-eight exact replay qualification, comparison report coverage, fake shadow,
   and G4/G5 full validation. Initial replay support is not the whole goal.
+
+## G4 operator and lifecycle replay coverage (2026-09-11)
+
+- Recorded control requests are materialized only in replay's temporary inbox.
+  The existing runtime/control implementation validates and applies them; replay
+  compares before/after events and resulting state rather than installing the
+  recorded outcome directly. No live incident state is modified.
+- Added tests for acknowledgment then rearm, three failed restarts followed by
+  suppression, restart with an initially OPEN persisted incident, collection
+  failure, exact cooldown boundary (59 vs 60 seconds), and all eight incident
+  types through fresh captures. All-eight tests compare three replay reports.
+- The first CPU fixture reused one frozen snapshot object and therefore recorded
+  cached trigger evidence. Corrected the fixture to emit fresh timestamped
+  observations at 0/5/10 seconds, matching collector semantics. No detector
+  thresholds or expected sustained-load behavior were weakened.
+- Unit result: 231 passed, 9 opt-in skipped, 1.32s. This is synthetic capture and
+  replay evidence, not new live eight-scenario or CI qualification.
+- Remaining G4: committed sanitized replay files/origin metadata, comparison
+  reports and non-executing fake shadow contract, negative/restart corpus, full
+  all-eight live capture/replay and CI verification. G5 remains open.
