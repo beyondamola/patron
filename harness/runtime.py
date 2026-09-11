@@ -34,6 +34,8 @@ class PatronRuntime:
         verifier=verify_incident,
         triggers: TriggerRegistry | None = None,
         config: DetectorConfig | None = None,
+        planner=None,
+        executor=None,
     ) -> None:
         self.container_name = container_name
         self.dry_run = dry_run
@@ -42,12 +44,13 @@ class PatronRuntime:
         self.config = config or DetectorConfig()
         self.collector = collector or DockerCollector(container_name, config=self.config)
         self.registry = registry or IncidentRegistry()
+        self.clock = self.registry.clock
         self.audit_logger = audit_logger or AuditLogger(self.registry.audit_path or "logs/incidents.jsonl")
         self.registry.audit_path = str(self.audit_logger.path.resolve())
-        self.planner = RulePlanner()
-        self.executor = DockerExecutor()
+        self.planner = planner if planner is not None else RulePlanner()
+        self.executor = executor if executor is not None else DockerExecutor()
         self.verifier = verifier
-        self.triggers = triggers or default_trigger_registry(config=self.config)
+        self.triggers = triggers or default_trigger_registry(config=self.config, clock=self.clock.monotonic)
 
     def process_once(self) -> dict[str, Any]:
         trace_packet("detector configuration", {"settings": self.config.to_dict(),
@@ -75,7 +78,7 @@ class PatronRuntime:
             return {"triggered": False, "error": str(exc)}
 
     def _process_once(self) -> dict[str, Any]:
-        cycle_started = time.perf_counter()
+        cycle_started = self.clock.monotonic()
         snapshot = self.collector.collect()
         trigger_packet, trigger_traces = self.triggers.evaluate_with_trace(snapshot)
         for trigger_trace in trigger_traces:
@@ -99,7 +102,7 @@ class PatronRuntime:
             self.verbose,
         )
 
-        detection_latency = time.perf_counter() - cycle_started
+        detection_latency = self.clock.monotonic() - cycle_started
         trace_packet("trigger packet", trigger_packet or {"incident_type": None}, self.trace)
 
         active = self.registry.active_for(snapshot.name)
@@ -143,15 +146,15 @@ class PatronRuntime:
             stage("Incident", f"reusing {incident.incident_id}", self.verbose)
 
         incident.status = RUNNING
-        incident.touch()
+        incident.touch(self.clock)
 
         context = build_context(snapshot, incident, trigger_packet)
         stage("Context", "status collected; logs collected", self.verbose)
         trace_packet("context packet", context, self.trace)
 
-        planning_started = time.perf_counter()
+        planning_started = self.clock.monotonic()
         plan = self.planner.plan(context)
-        planning_latency = time.perf_counter() - planning_started
+        planning_latency = self.clock.monotonic() - planning_started
         incident.last_action = plan.get("decision")
         stage("Planner", str(plan.get("decision")), self.verbose)
         trace_packet("planner JSON", plan, self.trace)
@@ -189,28 +192,28 @@ class PatronRuntime:
             )
             incident.verification_state = verification.to_dict()
             incident.status = OPEN
-            incident.touch()
+            incident.touch(self.clock)
             stage("Executor", "dry run: skipped", self.verbose)
             trace_packet("executor response", execution, self.trace)
             stage("Verifier", "SKIPPED", self.verbose)
             trace_packet("verifier response", verification.to_dict(), self.trace)
         else:
-            execution_started = time.perf_counter()
+            execution_started = self.clock.monotonic()
             execution = self.executor.execute(plan, context)
-            execution_latency = time.perf_counter() - execution_started
+            execution_latency = self.clock.monotonic() - execution_started
             if plan["decision"] == "escalate":
                 stage("Executor", f"escalate {context['resource']}", self.verbose)
             else:
                 stage("Executor", f"docker restart {context['resource']}", self.verbose)
             trace_packet("executor response", execution, self.trace)
 
-            verification_started = time.perf_counter()
+            verification_started = self.clock.monotonic()
             if plan["decision"] == "escalate" and execution.get("success"):
                 self.registry.mark_final(incident, ESCALATED)
                 verification = self.verifier(context["resource"], incident.incident_type, plan["decision"], incident_status=incident.status)
             else:
                 verification = self.verifier(context["resource"], incident.incident_type, plan["decision"])
-            verification_latency = time.perf_counter() - verification_started
+            verification_latency = self.clock.monotonic() - verification_started
             incident.verification_state = verification.to_dict()
             stage("Verifier", "PASS" if verification.passed else "FAIL", self.verbose)
             trace_packet("verifier response", verification.to_dict(), self.trace)
@@ -225,7 +228,7 @@ class PatronRuntime:
                     self.registry.mark_final(incident, ESCALATED)
                 else:
                     incident.status = OPEN
-                    incident.touch()
+                    incident.touch(self.clock)
 
         metrics = {
             "incident_type": incident.incident_type,
@@ -273,7 +276,7 @@ class PatronRuntime:
                 self.process_once()
                 slept = 0.0
                 while slept < interval and not shutdown_requested:
-                    time.sleep(min(0.5, interval - slept))
+                    self.clock.sleep(min(0.5, interval - slept))
                     slept += 0.5
         finally:
             signal.signal(signal.SIGINT, previous_handler)

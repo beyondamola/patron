@@ -5,10 +5,11 @@ import os
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 from uuid import uuid4
 
 from .storage import StateConflict, StateLock, atomic_json, sync_directory
+from .clock import Clock, SystemClock
 
 
 OPEN = "OPEN"
@@ -53,10 +54,13 @@ class Incident:
         resource_type: str,
         incident_type: str,
         trigger_reason: str,
+        *,
+        clock: Clock | None = None,
+        id_factory: Callable[[], str] | None = None,
     ) -> "Incident":
-        now = utc_now()
+        now = clock.utc_now() if clock else utc_now()
         return cls(
-            incident_id=str(uuid4()),
+            incident_id=id_factory() if id_factory else str(uuid4()),
             resource=resource,
             resource_type=resource_type,
             incident_type=incident_type,
@@ -67,8 +71,8 @@ class Incident:
             trigger_reason=trigger_reason,
         )
 
-    def touch(self) -> None:
-        self.updated_at = utc_now()
+    def touch(self, clock: Clock | None = None) -> None:
+        self.updated_at = clock.utc_now() if clock else utc_now()
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -108,7 +112,12 @@ class IncidentRegistry:
         self,
         state_path: Path | str | None = None,
         cooldown_seconds: int = 60,
+        *,
+        clock: Clock | None = None,
+        id_factory: Callable[[], str] | None = None,
     ) -> None:
+        self.clock = clock or SystemClock()
+        self.id_factory = id_factory
         self.state_path = Path(state_path or os.environ.get("PATRON_STATE_PATH", "logs/incident_state.json")).resolve()
         self.lock = StateLock(self.state_path)
         self.revision = 0
@@ -241,7 +250,7 @@ class IncidentRegistry:
         resolved = self.resolved_at.get(resource)
         if not resolved:
             return False
-        elapsed = (datetime.now(timezone.utc) - parse_time(resolved)).total_seconds()
+        elapsed = (parse_time(self.clock.utc_now()) - parse_time(resolved)).total_seconds()
         return elapsed < self.cooldown_seconds
 
     def get_or_open(
@@ -266,7 +275,8 @@ class IncidentRegistry:
             return active, False
         if self.in_cooldown(resource, container_id, incident_type):
             return None, False
-        incident = Incident.open(resource, resource_type, incident_type, trigger_reason)
+        incident = Incident.open(resource, resource_type, incident_type, trigger_reason,
+                                 clock=self.clock, id_factory=self.id_factory)
         incident.container_id = container_id
         if previous and previous.rearmed:
             incident.predecessor_id = previous.incident_id
@@ -275,7 +285,7 @@ class IncidentRegistry:
 
     def mark_resolved(self, incident: Incident) -> None:
         incident.status = RESOLVED
-        incident.touch()
+        incident.touch(self.clock)
         self.resolved_at[incident.resource] = incident.updated_at
         self.resolved_generations[incident.resource] = incident.container_id
         self.resolved_incident_types[incident.resource] = incident.incident_type
@@ -283,7 +293,7 @@ class IncidentRegistry:
 
     def mark_final(self, incident: Incident, status: str) -> None:
         incident.status = status
-        incident.touch()
+        incident.touch(self.clock)
         if status == ESCALATED:
             self.resolved_at[incident.resource] = incident.updated_at
             self.resolved_generations[incident.resource] = incident.container_id

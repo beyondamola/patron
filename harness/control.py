@@ -140,7 +140,7 @@ class IncidentControl:
 
     def _event(self, request, result, incident):
         return {"schema_version": 1, "event": "operator_control", "event_id": request.request_id,
-                "state_path": str(self.registry.state_path), "timestamp": utc_now(),
+                "state_path": str(self.registry.state_path), "timestamp": self.registry.clock.utc_now(),
                 "request": asdict(request), "result": result, "incident": incident}
 
     def apply(self, request: ControlRequest, dry_run=False):
@@ -176,7 +176,7 @@ class IncidentControl:
         elif not dry_run:
             current = self.registry.incidents.get(incident["resource"])
             if request.operation == "acknowledge":
-                metadata = {"actor": request.actor, "reason": request.reason, "timestamp": utc_now()}
+                metadata = {"actor": request.actor, "reason": request.reason, "timestamp": self.registry.clock.utc_now()}
                 incident["acknowledgment"] = metadata
                 if current and current.incident_id == request.incident_id:
                     current.acknowledgment = metadata

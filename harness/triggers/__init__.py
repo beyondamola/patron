@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import time
+from typing import Callable
+
 from ..config import DetectorConfig
 
 from .base import Trigger, TriggerRegistry
@@ -13,7 +16,8 @@ from .stopped import ContainerStoppedTrigger
 from .unhealthy import ContainerUnhealthyTrigger
 
 
-def default_trigger_registry(restart_loop_threshold: int = 3, *, config: DetectorConfig | None = None) -> TriggerRegistry:
+def default_trigger_registry(restart_loop_threshold: int = 3, *, config: DetectorConfig | None = None,
+                             clock: Callable[[], float] = time.monotonic) -> TriggerRegistry:
     config = config or DetectorConfig(restart_loop_threshold=restart_loop_threshold)
     registry = TriggerRegistry()
     registry.register(ContainerOOMKilledTrigger())
@@ -21,7 +25,7 @@ def default_trigger_registry(restart_loop_threshold: int = 3, *, config: Detecto
     registry.register(ContainerBadConfigTrigger())
     registry.register(ContainerDependencyDownTrigger())
     registry.register(ContainerDiskFullTrigger(config.disk_threshold))
-    registry.register(ContainerHighCPUTrigger(config=config))
+    registry.register(ContainerHighCPUTrigger(config=config, clock=clock))
     registry.register(ContainerUnhealthyTrigger())
     registry.register(ContainerStoppedTrigger())
     return registry

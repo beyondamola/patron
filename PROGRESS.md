@@ -253,3 +253,28 @@ and create a linked new incident only if a later collection still detects failur
   check. Resume this existing run, do not dispatch a replacement.
 - G3 remains open pending CI artifacts and requirement-by-requirement review.
   G4 capture/replay and G5 final qualification are not implemented.
+- Subsequent check: run 34568818075 completed successfully in all four jobs.
+  Downloaded artifacts/g3-qualified; validated exactly eight integration cases
+  and one operator case on each Linux architecture, with no failures/skips.
+  Both unit artifacts contain the 53-sample corpus report with no regressions.
+  Requirement-by-requirement G3 review and a consolidated report remain next.
+- Completed that review in G3_VERIFICATION.md. G3 is verified against 13dc0f4;
+  G4 begins with explicit clock/ID dependencies, followed by versioned capture,
+  isolated exact replay, causal comparison, and fake shadow evaluation.
+
+## G4 dependency groundwork (2026-09-11)
+
+- Added Clock protocol/SystemClock, optional registry ID factory, clock-aware
+  incident creation/touch/cooldown, runtime stage timing and window-clock wiring,
+  operator application timestamps, and explicit runtime planner/executor seams.
+  Defaults retain local live behavior; no replay CLI or capture claim yet.
+- Added tests/test_runtime_clock.py: recorded IDs/timestamps, exact cooldown
+  boundary, deterministic stage durations and final transition with global
+  monotonic/perf_counter/sleep functions forbidden. Existing Docker/network
+  guard remains active. Registry state and audit use explicit temporary paths.
+- Unit result after groundwork: 181 passed, 9 opt-in skipped, 0.91s.
+- G4 remaining: capture schema/validation/redaction, observation and causal hooks
+  (including verifier reads), explicit replay adapters, exact and counterfactual
+  comparison modes, lifecycle fixtures, fake shadow contract, and qualification.
+- G3 report qualifies the pre-groundwork commit 13dc0f4. These G4 changes have
+  unit evidence only so far; do not relabel earlier Docker/CI runs as testing them.
