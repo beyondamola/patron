@@ -538,3 +538,41 @@ and create a linked new incident only if a later collection still detects failur
   unverified; no duplicate CI run or alternate access route was used.
 - Current historical-control changes still require Docker/CI requalification.
   G4/G5 remain open, with no claim that older CI evidence proves these changes.
+
+### Historical-control qualification follow-up
+
+- Approval access resumed. Run 34673684287 is successful; downloaded artifacts
+  to artifacts/g4-provenance-qualified and inspected the exact 290 unit cases
+  per Python version, 8 scenario + 1 operator cases per Linux architecture,
+  and 16 matching replay/provenance reports. None of these cases were skipped.
+- Pushed f8f5ce7; its CI run is 34715607993. No duplicate workflow was started.
+- Current local Docker: all 8 passed, 299 deselected, 80.02s. Evidence:
+  artifacts/raw/g4-history-integration.xml. Tests include capture/replay,
+  historical-header compatibility, lab provenance and resource cleanup.
+- The 33 checked-in captures and manifest still regenerate byte-identically.
+  Added G4_VERIFICATION.md with evidence/requirements mapping and explicit limits.
+  Current-revision CI artifact review and G5 handoff remain required.
+
+### CI OOM race found and corrected
+
+- Run 34715607993 failed the Linux amd64 operator workflow; this was not a
+  historical-control replay failure. Original evidence is preserved under
+  artifacts/g4-history-failed. The final operator assertion correctly found an
+  unexpected RESOLVED CONTAINER_STOPPED incident in an OOM-only environment.
+- Audit incident c6c9b54b-10b9-4faa-8a95-4a4113732ef9 records an unintended restart
+  at 19:58:12 UTC. Trace showed exit_code=137 and oom_killed=false, followed by
+  positive OOM evidence at 19:58:14. The existing immediate inspect confirmation
+  was insufficient to eliminate Docker's delayed OOM metadata window.
+- ContainerStoppedTrigger now withholds generic restart for nonrunning exit 137
+  without positive OOM evidence. It does not classify SIGKILL itself as OOM.
+  Trace explains the uncertainty; subsequent positive OOM evidence escalates.
+  Persistent unknown SIGKILL causes require operator investigation, documented
+  in README. No detector threshold was lowered and no new action was added.
+- tests/test_oom_transition.py proves no action/healthy result on the ambiguous
+  observation, followed by exactly one escalation when OOM evidence arrives.
+  All-eight integration now inspects the entire state-scoped audit history for
+  wrong classifications and any restart in escalation-only scenarios.
+- Local unit: 300 passed, 9 opt-in skipped, 5.68s. Real operator test after the
+  correction: 1 passed, 308 deselected, 13.80s; evidence
+  artifacts/raw/g4-oom-guard-operator.xml. New all-eight/CI qualification remains
+  required; the original failed workflow is not replaced or retried to green.

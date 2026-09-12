@@ -29,7 +29,7 @@ generation, acknowledgments, and rearm/predecessor metadata. The implementation'
 Runtime and offline control mutations share the same state-path ownership lock.
 The runtime processes an adjacent atomic control inbox between cycles. A request
 contains request_id (canonical UUID), incident_id, expected_revision, operation,
-reason, actor, and timestamp. Stable request IDs make repeated delivery idempotent.
+reason, actor, and created_at. Stable request IDs make repeated delivery idempotent.
 State replacement is atomic and fsynced; audit delivery is a separate durable
 step. A pending outbox is not fully delivered success.
 

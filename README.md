@@ -277,6 +277,12 @@ python -m scenarios run restart_loop --target patron-sim-restart-loop --external
 
 Docker health status only exists when a container has a healthcheck configured. If `has_healthcheck=false`, Patron reports `health_status=none`, and `CONTAINER_UNHEALTHY` cannot fire.
 
+Exit code 137 indicates SIGKILL, not necessarily OOM. Docker can expose that exit
+before its OOM flag settles. Patron withholds the generic stopped-container
+restart while exit 137 has no confirmed OOM cause. Subsequent OOM evidence triggers
+the normal escalation. If the cause remains unknown, trace explains the rejected
+restart; investigate manually instead of treating the container as recovered.
+
 Restart-loop detection requires `restart_count >= 3` in the collector output. The restart-loop scenario waits for Docker's restart count to cross that threshold before it claims injection succeeded.
 
 If Patron and a scenario use different container names, detection will fail. Compare the scenario's verbose pre/post state with `inspect-docker` output to verify the same container id and labels.

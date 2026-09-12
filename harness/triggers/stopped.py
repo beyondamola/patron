@@ -14,6 +14,10 @@ class ContainerStoppedTrigger(Trigger):
             return False
         if snapshot.status == "restarting" or snapshot.raw.get("Restarting"):
             return False
+        # Docker may publish exit 137 before OOMKilled. SIGKILL alone does not
+        # establish an OOM cause or justify an automatic generic restart.
+        if not snapshot.running and snapshot.exit_code == 137 and not snapshot.oom_killed:
+            return False
         return not snapshot.running or snapshot.status in self.STOPPED_STATUSES
 
     def build_metadata(self, snapshot: ContainerSnapshot) -> dict:
@@ -35,6 +39,8 @@ class ContainerStoppedTrigger(Trigger):
             reason = "container is restarting"
         elif snapshot.running:
             reason = "container is running"
+        elif snapshot.exit_code == 137 and not snapshot.oom_killed:
+            reason = "exit_code=137 with oom_killed=false: SIGKILL cause unconfirmed; automatic restart withheld"
         else:
             reason = "container is not running"
         return {

@@ -37,6 +37,14 @@ def test_real_scenario(name, tmp_path, require_docker) -> None:
     result = run_scenario(scenario, context, ScenarioResultWriter(result_path))
     assert result.status == "PASSED", result.to_json()
     assert result.classification_correct and result.policy_correct and result.final_status_correct
+    state_path = (result_path.parent / "incident_state.json").resolve()
+    history = [record for line in Path("logs/incidents.jsonl").read_text().splitlines()
+               if (record := json.loads(line)).get("state_path") == str(state_path)
+               and record.get("event") == "incident_snapshot"]
+    assert history and all(record["incident_type"] == result.expected_incident_type for record in history), history
+    if result.expected_final_status == "ESCALATED":
+        assert all((record.get("action_executed") or {}).get("action") != "restart_container"
+                   for record in history), history
     assert not context.docker.inspect(context.target_container).exists
     for resource_type, listing in (("container", ["ps", "-aq"]),
                                    ("network", ["network", "ls", "-q"]),
