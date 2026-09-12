@@ -42,6 +42,10 @@ cost and wall-time caps, and review of the execution-disabled boundary. Compare
 schema validity, policy admissibility, disagreements, and latency rather than
 claiming recovery from a recommendation. Good scores never authorize live actions.
 
-Remaining qualification work includes committed replay fixtures, richer timing
-reports, and full live capture/replay CI. This document is not an authorization
-to make provider calls or a claim that G4/G5 is complete.
+The committed 33-file synthetic corpus and all-eight live capture/replay checks
+are available. CLI `report_metadata.computation_seconds` measures the complete
+validation/comparison operation, not isolated candidate inference. Recorded
+runtime metrics remain separate. Candidate-specific inference timing is not
+measured by the pure offline API; do not present total comparison time as model
+latency. Final G4 requirements review and G5 qualification remain open.
+This document is not authorization to make provider calls.

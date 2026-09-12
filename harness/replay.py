@@ -224,7 +224,9 @@ def replay_capture(path: str | Path) -> dict:
         runtime.finish_capture()
         if stream.index != len(records):
             raise ReplayMismatch("unconsumed capture events")
+    from .replay_metrics import exact_metrics
     return {"schema_version": 1, "mode": "exact", "matched": True,
+            "agreement": exact_metrics(records),
             "comparison_scope": "decisions and lifecycle state; timestamps, storage paths and latency excluded",
             **validation, "cycle_results": cycles,
             "recorded_metrics": [record["payload"]["result"]["audit"]["metrics"] for record in records

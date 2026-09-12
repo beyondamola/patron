@@ -494,9 +494,12 @@ watch shutdown persistence step and are rejected with a missing-evidence error.
 Recorded operator requests are replayed through the normal control inbox in
 the temporary directory. Focused tests cover acknowledgment/rearm, retries,
 suppression, cooldown boundaries, and initial-state restart continuity.
-This is still G4 work in progress: the checked-in replay corpus, counterfactual
-comparisons, fake shadow evaluation, and full live/CI replay qualification remain
-pending. Unsupported event sequences fail rather than claim a matching replay.
+The committed corpus contains 33 sanitized synthetic captures with explicit
+origins and expected outcomes (`tests/fixtures/replay/manifest.json`). All eight
+real Docker captures have also passed three identical offline replays on local
+macOS arm64 and Linux CI on both amd64 and arm64. G4's final requirements review
+and G5 handoff remain open. Unsupported event sequences fail rather than claim
+a matching replay.
 
 Offline comparison is available:
 
@@ -515,6 +518,17 @@ is never inferred from a recorded restart. Changed measurement paths,
 dependencies, or log-evidence TTL require a new capture and cannot reuse old
 measurements. See `SHADOW_EVALUATION.md` for scope and the separate approval gate
 for any future real planner evaluation.
+
+Exact reports include classification and terminal-state agreement counts with
+denominators. These measure reproduction of recorded evidence, not independent
+classification accuracy. Comparison reports include action/policy difference
+totals and an explicit zero comparable candidate final-state count: candidate
+lifecycles are not executed. Attempts, stage metrics, and any known detection
+latency are recorded-reference evidence only; unknown onset remains null.
+CLI reports put elapsed validation/replay computation time in `report_metadata`,
+separate from recorded runtime stage latency. Exclude `report_metadata` when
+comparing semantic reports across repeated CLI runs. The pure replay/comparison
+APIs do not read a real clock and return deterministic semantic content only.
 
 `harness run`, `harness watch`, `harness inspect-docker`, `scenarios run`, and
 `scenarios run-all` accept `--config path/to/detectors.json`. Omitted settings

@@ -84,14 +84,19 @@ def compare_capture(path, baseline_config: DetectorConfig, candidate_config: Det
             stats["missed"] += int(left_type == kind and right_type != kind)
             stats["extra"] += int(left_type != kind and right_type == kind)
         incident = recorded_result.get("incident") or {}
+        metrics = (recorded_result.get("audit") or {}).get("metrics") or {}
         rows.append({"observation_id": record["sequence"], "baseline_type": left_type,
             "candidate_type": right_type, "recorded_type": recorded_type,
             "baseline": left, "candidate": right, "different": different, "malformed": malformed,
+            "action_different": left_action != right_action,
+            "policy_different": allowed_left != allowed_right,
             "recommendation_disagreement": bool(left and right and left["plan"] != right["plan"]),
             "recorded_attempts": incident.get("attempts"), "recorded_final_status": incident.get("status"),
             "candidate_final_status": None,
+            "final_state_agreement": None,
             "outcome_evidence": "counterfactual_unknown" if divergence else "recorded_reference_only",
-            "detection_latency_seconds": None})
+            "detection_latency_seconds": metrics.get("detection_latency_seconds"),
+            "recorded_runtime_metrics": deepcopy(metrics)})
     return {"schema_version": 1, "mode": "comparison", "execution_enabled": False,
         "scope": "per-observation recommendations; no candidate lifecycle or recovery is simulated",
         "baseline_config_fingerprint": baseline_config.fingerprint,
@@ -99,4 +104,9 @@ def compare_capture(path, baseline_config: DetectorConfig, candidate_config: Det
         "per_incident_type": counts, "observations": rows,
         "regressions": sum(row["different"] or row["malformed"] for row in rows),
         "malformed_plans": sum(row["malformed"] for row in rows),
+        "action_differences": sum(row["action_different"] for row in rows),
+        "policy_differences": sum(row["policy_different"] for row in rows),
+        "final_state_agreement": {"comparable": 0, "agreed": 0,
+            "unknown": sum(row["recorded_final_status"] is not None for row in rows),
+            "reason": "recommendation comparison does not execute a candidate lifecycle"},
         "policy_denials": sum(bool(row["candidate"] and not row["candidate"]["policy"]["allowed"]) for row in rows)}

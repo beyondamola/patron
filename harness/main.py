@@ -149,6 +149,7 @@ def main(argv: list[str] | None = None) -> int:
 def _main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     if args.command == "replay":
+        from time import perf_counter
         if args.replay_command == "compare":
             from pathlib import Path
             from .comparison import compare_capture
@@ -157,12 +158,17 @@ def _main(argv: list[str] | None = None) -> int:
             sources = (args.capture_path, args.baseline_config, args.candidate_config)
             if output.resolve() in {Path(source).resolve() for source in sources}:
                 raise ValueError("comparison output must not overwrite an input")
+            started = perf_counter()
             report = compare_capture(args.capture_path, DetectorConfig.load(args.baseline_config),
                 DetectorConfig.load(args.candidate_config), FakeCandidate(args.fake_candidate))
+            report["report_metadata"] = {"computation_seconds": perf_counter() - started,
+                "scope": "capture validation and comparison; excludes output serialization",
+                "semantic": False}
             output.parent.mkdir(parents=True, exist_ok=True)
             with output.open("x", encoding="utf-8") as handle:
                 handle.write(json.dumps(report, indent=2, sort_keys=True, allow_nan=False) + "\n")
-            print(json.dumps({"regressions": report["regressions"], "malformed_plans": report["malformed_plans"]}))
+            print(json.dumps({key: report[key] for key in
+                ("regressions", "malformed_plans", "action_differences", "policy_denials")}))
             return int(bool(report["regressions"]))
         if args.replay_command == "run":
             from pathlib import Path
@@ -170,7 +176,11 @@ def _main(argv: list[str] | None = None) -> int:
             output = Path(args.output)
             if output.resolve() == Path(args.capture_path).resolve():
                 raise ValueError("replay output must not overwrite input capture")
+            started = perf_counter()
             report = replay_capture(args.capture_path)
+            report["report_metadata"] = {"computation_seconds": perf_counter() - started,
+                "scope": "capture validation and exact replay; excludes output serialization",
+                "semantic": False}
             output.parent.mkdir(parents=True, exist_ok=True)
             with output.open("x", encoding="utf-8") as handle:
                 handle.write(json.dumps(report, indent=2, sort_keys=True, allow_nan=False) + "\n")

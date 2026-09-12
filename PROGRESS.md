@@ -433,3 +433,36 @@ and create a linked new incident only if a later collection still detects failur
   272 passed, 9 opt-in skipped, 0.99s.
 - G4 still needs richer metrics/timing reports, actual Linux CI qualification
   of capture/replay, and a final requirement review. G5 remains open.
+
+## G4 report metrics and Linux artifact review (2026-09-11)
+
+- Verified GitHub Actions run 34671599363 at commit 57435aa completed successfully:
+  https://github.com/beyondamola/patron/actions/runs/34671599363.
+  Downloaded evidence to artifacts/g4-qualified. On each Linux architecture,
+  validated exactly eight scenario cases and one operator case with no failures,
+  errors, or skips; inspected all eight retained replay reports.
+- Replayed all 16 downloaded Linux captures three times using the current code.
+  Each produced identical semantic reports, all eight expected classifications
+  were present on each architecture, and exact replay matched recorded outcomes.
+  This is offline revalidation of actual CI captures, not another live Docker run.
+- REP-5: harness/replay_metrics.py now reports per-type classification and
+  terminal-state agreement with denominators after successful exact matching.
+  Suppressed observations do not inflate the number of terminal outcomes.
+  These are reproducibility counts, explicitly not ground-truth accuracy.
+- Comparison adds action/policy totals, recorded runtime metrics, and explicit
+  null candidate final-state agreement with an unknown-outcome denominator.
+  Unknown detection onset stays null. CLI computation timing is nonsemantic
+  report_metadata; core APIs remain clock-free and deterministic.
+- Tests: tests/test_replay_reports.py checks retry/suppression denominators,
+  different CLI timing with identical semantic results, and a changed disk
+  threshold yielding a readable missed incident and exit status 1 without a
+  candidate recovery claim. Existing corpus tests still replay each fixture
+  three times under live-I/O prohibitions.
+- Initial metrics implementation used the wrong policy payload key and failed
+  27 replay tests. Corrected it to the existing policy event schema, without
+  modifying captures or expected behavior. Final command python3 -m pytest -q:
+  275 passed, 9 opt-in skipped, 10.84s.
+- Updated README and SHADOW_EVALUATION.md to distinguish completed corpus/CI
+  evidence from open final review. G4 still needs its requirement-by-requirement
+  review, including provenance/known-onset reporting and incomplete causal
+  evidence behavior. G5 final qualification and handoff are not complete.
