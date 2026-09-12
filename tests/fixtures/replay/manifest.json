@@ -1,0 +1,301 @@
+{
+  "fixtures": [
+    {
+      "expected_incident_types": [
+        null
+      ],
+      "path": "healthy-no-healthcheck-0.jsonl",
+      "source_case": "healthy-no-healthcheck"
+    },
+    {
+      "expected_incident_types": [
+        null
+      ],
+      "path": "healthy-healthcheck-0.jsonl",
+      "source_case": "healthy-healthcheck"
+    },
+    {
+      "expected_incident_types": [
+        "CONTAINER_STOPPED"
+      ],
+      "path": "stopped-0.jsonl",
+      "source_case": "stopped"
+    },
+    {
+      "expected_incident_types": [
+        "CONTAINER_UNHEALTHY"
+      ],
+      "path": "unhealthy-0.jsonl",
+      "source_case": "unhealthy"
+    },
+    {
+      "expected_incident_types": [
+        "CONTAINER_OOM_KILLED"
+      ],
+      "path": "oom-priority-0.jsonl",
+      "source_case": "oom-priority"
+    },
+    {
+      "expected_incident_types": [
+        "CONTAINER_RESTART_LOOP"
+      ],
+      "path": "restart-priority-0.jsonl",
+      "source_case": "restart-priority"
+    },
+    {
+      "expected_incident_types": [
+        null
+      ],
+      "path": "restart-below-0.jsonl",
+      "source_case": "restart-below"
+    },
+    {
+      "expected_incident_types": [
+        "CONTAINER_BAD_CONFIG"
+      ],
+      "path": "bad-config-priority-0.jsonl",
+      "source_case": "bad-config-priority"
+    },
+    {
+      "expected_incident_types": [
+        null
+      ],
+      "path": "old-config-filtered-0.jsonl",
+      "source_case": "old-config-filtered"
+    },
+    {
+      "expected_incident_types": [
+        null
+      ],
+      "path": "dependency-unknown-0.jsonl",
+      "source_case": "dependency-unknown"
+    },
+    {
+      "expected_incident_types": [
+        "CONTAINER_DEPENDENCY_DOWN"
+      ],
+      "path": "dependency-priority-0.jsonl",
+      "source_case": "dependency-priority"
+    },
+    {
+      "expected_incident_types": [
+        null
+      ],
+      "path": "disk-unavailable-0.jsonl",
+      "source_case": "disk-unavailable"
+    },
+    {
+      "expected_incident_types": [
+        null
+      ],
+      "path": "disk-below-0.jsonl",
+      "source_case": "disk-below"
+    },
+    {
+      "expected_incident_types": [
+        "CONTAINER_DISK_FULL"
+      ],
+      "path": "disk-boundary-priority-0.jsonl",
+      "source_case": "disk-boundary-priority"
+    },
+    {
+      "expected_incident_types": [
+        null,
+        null,
+        null
+      ],
+      "path": "cpu-below-0.jsonl",
+      "source_case": "cpu-below"
+    },
+    {
+      "expected_incident_types": [
+        null,
+        null,
+        "CONTAINER_HIGH_CPU"
+      ],
+      "path": "cpu-boundary-0.jsonl",
+      "source_case": "cpu-boundary"
+    },
+    {
+      "expected_incident_types": [
+        null,
+        null,
+        "CONTAINER_HIGH_CPU"
+      ],
+      "path": "cpu-above-0.jsonl",
+      "source_case": "cpu-above"
+    },
+    {
+      "expected_incident_types": [
+        null,
+        null,
+        null,
+        null
+      ],
+      "path": "cpu-burst-0.jsonl",
+      "source_case": "cpu-burst"
+    },
+    {
+      "expected_incident_types": [
+        null,
+        null,
+        null
+      ],
+      "path": "cpu-missing-0.jsonl",
+      "source_case": "cpu-missing"
+    },
+    {
+      "expected_incident_types": [
+        null,
+        null,
+        null
+      ],
+      "path": "cpu-nan-0.jsonl",
+      "source_case": "cpu-nan"
+    },
+    {
+      "expected_incident_types": [
+        null,
+        null,
+        null,
+        null
+      ],
+      "path": "cpu-duplicate-0.jsonl",
+      "source_case": "cpu-duplicate"
+    },
+    {
+      "expected_incident_types": [
+        null,
+        null,
+        null,
+        null
+      ],
+      "path": "cpu-out-of-order-0.jsonl",
+      "source_case": "cpu-out-of-order"
+    },
+    {
+      "expected_incident_types": [
+        null,
+        null,
+        null
+      ],
+      "path": "cpu-stale-0.jsonl",
+      "source_case": "cpu-stale"
+    },
+    {
+      "expected_incident_types": [
+        null,
+        null,
+        null
+      ],
+      "path": "cpu-gap-0.jsonl",
+      "source_case": "cpu-gap"
+    },
+    {
+      "expected_incident_types": [
+        null,
+        null,
+        null
+      ],
+      "path": "cpu-new-generation-0.jsonl",
+      "source_case": "cpu-new-generation"
+    },
+    {
+      "expected_incident_types": [
+        null,
+        null
+      ],
+      "path": "cpu-runtime-restart-0.jsonl",
+      "source_case": "cpu-runtime-restart"
+    },
+    {
+      "expected_incident_types": [
+        null
+      ],
+      "path": "cpu-runtime-restart-1.jsonl",
+      "source_case": "cpu-runtime-restart"
+    },
+    {
+      "expected_final_statuses": [
+        "OPEN",
+        "OPEN",
+        "ESCALATED",
+        null
+      ],
+      "expected_incident_types": [
+        "CONTAINER_STOPPED",
+        "CONTAINER_STOPPED",
+        "CONTAINER_STOPPED",
+        null
+      ],
+      "path": "lifecycle-retry-0.jsonl",
+      "source_case": "retry"
+    },
+    {
+      "expected_final_statuses": [
+        "RESOLVED",
+        null,
+        "RESOLVED"
+      ],
+      "expected_incident_types": [
+        "CONTAINER_STOPPED",
+        null,
+        "CONTAINER_STOPPED"
+      ],
+      "path": "lifecycle-cooldown-0.jsonl",
+      "source_case": "cooldown"
+    },
+    {
+      "expected_final_statuses": [
+        "ESCALATED",
+        null,
+        "ESCALATED",
+        null
+      ],
+      "expected_incident_types": [
+        "CONTAINER_OOM_KILLED",
+        null,
+        "CONTAINER_OOM_KILLED",
+        null
+      ],
+      "path": "lifecycle-rearm-0.jsonl",
+      "source_case": "rearm"
+    },
+    {
+      "expected_final_statuses": [
+        null,
+        null,
+        null
+      ],
+      "expected_incident_types": [
+        null,
+        null,
+        null
+      ],
+      "path": "lifecycle-collection-error-0.jsonl",
+      "source_case": "collection-error"
+    },
+    {
+      "expected_final_statuses": [
+        "OPEN"
+      ],
+      "expected_incident_types": [
+        "CONTAINER_STOPPED"
+      ],
+      "path": "lifecycle-restart-continuity-0.jsonl",
+      "source_case": "restart-continuity"
+    },
+    {
+      "expected_final_statuses": [
+        "OPEN"
+      ],
+      "expected_incident_types": [
+        "CONTAINER_STOPPED"
+      ],
+      "path": "lifecycle-restart-continuity-1.jsonl",
+      "source_case": "restart-continuity"
+    }
+  ],
+  "origin": "Synthetic captures generated through PatronRuntime from hand-labeled detector cases; no Docker calls",
+  "schema_version": 1
+}

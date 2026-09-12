@@ -23,3 +23,26 @@ nonmatching label is negative for that incident type, including cases where
 another, higher-priority cause wins. The report also checks rule-planner and
 policy outputs; it never imports or calls an executor. Full lifecycle replay
 belongs to G4 and is not implemented by this evaluator.
+
+## Recorded Replay Fixtures
+
+`replay/manifest.json` lists 33 sanitized synthetic captures generated through
+PatronRuntime, not invented executor transitions. Detector cases originate in
+`detectors.json`; the separate lifecycle cases cover failed retries, cooldown,
+terminal suppression, acknowledgment/rearm, collection errors, and persisted
+OPEN-incident restart continuity. Each sample has an explicit expected label;
+lifecycle cases also declare expected final statuses. The mocked infrastructure
+and fixed clocks/IDs make these regression fixtures, not real Docker evidence.
+
+Regenerate into a new empty directory with:
+
+```bash
+python -m ci.replay_fixtures --output /tmp/patron-replay-fixtures
+```
+
+The generator validates and replays every file, removes temporary filesystem
+locations, and fixes run/incident IDs deterministically. The committed corpus
+regenerates byte-identically. Review changes against the manifest before replacing
+fixtures. Default tests replay every committed capture three times with live
+Docker constructors, subprocess, network, real sleeps and clocks forbidden.
+Large real Docker captures remain in ignored scenario logs and CI artifacts.

@@ -486,7 +486,8 @@ It recomputes trigger/context/rule-planner/policy and lifecycle decisions using
 recorded execution/verification responses, with temporary state and audit sinks.
 The report compares behavioral state, not storage paths, wall-clock timestamps,
 or stage latency; recorded latency is reported separately. Window coverage is
-compared at microsecond precision after monotonic-origin conversion.
+compared with a one-microsecond absolute tolerance after monotonic-origin
+conversion; decisions, thresholds, counts, and lifecycle state remain exact.
 
 Use a fresh capture: older captures lacking runtime mode cannot reproduce the
 watch shutdown persistence step and are rejected with a missing-evidence error.

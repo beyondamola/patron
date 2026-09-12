@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from copy import deepcopy
+import math
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
@@ -27,13 +28,24 @@ def first_difference(actual, expected, path="payload"):
         for key in sorted(set(actual) | set(expected)):
             if key not in actual or key not in expected:
                 return f"{path}.{key}: missing field"
-            if actual[key] != expected[key]:
+            if not equivalent(actual[key], expected[key], key):
                 return first_difference(actual[key], expected[key], f"{path}.{key}")
     if isinstance(actual, list) and isinstance(expected, list):
         for index, (left, right) in enumerate(zip(actual, expected)):
-            if left != right:
+            if not equivalent(left, right):
                 return first_difference(left, right, f"{path}[{index}]")
     return f"{path}: computed={actual!r}, recorded={expected!r}"
+
+
+def equivalent(actual, expected, key=None):
+    if key in {"coverage_seconds", "recovery_coverage_seconds"}:
+        if type(actual) in (int, float) and type(expected) in (int, float):
+            return math.isclose(actual, expected, rel_tol=0, abs_tol=0.000001)
+    if isinstance(actual, dict) and isinstance(expected, dict):
+        return actual.keys() == expected.keys() and all(equivalent(actual[k], expected[k], k) for k in actual)
+    if isinstance(actual, list) and isinstance(expected, list):
+        return len(actual) == len(expected) and all(equivalent(a, b) for a, b in zip(actual, expected))
+    return actual == expected
 
 
 def semantic(value):
@@ -45,8 +57,6 @@ def semantic(value):
                 continue
             if key == "resolved_at":
                 result[key] = sorted(item)
-            elif key in {"coverage_seconds", "recovery_coverage_seconds"} and isinstance(item, (float, int)):
-                result[key] = round(item, 6)
             else:
                 result[key] = semantic(item)
         return result
@@ -93,7 +103,7 @@ class EventStream:
 
     def consume(self, event, payload=None):
         record = self.expected(event)
-        if payload is not None and semantic(sanitized(payload)) != semantic(record["payload"]):
+        if payload is not None and not equivalent(semantic(sanitized(payload)), semantic(record["payload"])):
             raise ReplayMismatch(f"{event} payload differs at sequence {self.index}: {first_difference(semantic(sanitized(payload)), semantic(record['payload']))}")
         self.clock.advance(record)
         self.index += 1

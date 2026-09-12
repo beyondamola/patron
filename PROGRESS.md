@@ -405,3 +405,31 @@ and create a linked new incident only if a later collection still detects failur
 - Added SHADOW_EVALUATION.md template and real-provider authorization gate.
   G4 remains incomplete: committed replay corpus, richer metrics/timing reports,
   all-eight live capture/replay CI, and full acceptance review remain required.
+
+## G4 corpus and real replay qualification (2026-09-11)
+
+- Integration now enables capture for all eight scenarios, verifies existing
+  recovery/escalation and cleanup assertions, then replays each capture three
+  times and requires identical reports and expected type/final status. Reports
+  are retained beside captures for CI artifacts.
+- First real run: 7 passed, restart_loop replay failed on duration evidence
+  rounding at a microsecond boundary (3.296255499... vs 3.296255500...). Original
+  artifacts/raw/g4-capture-replay.xml and scenario
+  f14b95c0-3d41-4ba6-b004-9728bc0722d5 are preserved. Docker classification and
+  escalation succeeded; the replay checker, not remediation, failed.
+- Replaced decimal rounding with explicit absolute tolerance <=1 microsecond
+  for coverage_seconds/recovery_coverage_seconds only. Added tests proving exact
+  decision and threshold checks remain unchanged. The original failed capture
+  replays successfully with the fix.
+- New post-fix real run: all 8 passed in 60.03s, no skips. Evidence:
+  artifacts/raw/g4-capture-replay-fixed.xml. No automatic test retry hid the
+  initial failure; this was a separate run after a documented code change.
+- Added 33 committed synthetic capture fixtures and manifest under
+  tests/fixtures/replay. Generator ci/replay_fixtures.py uses the runtime with
+  explicit fake infrastructure/clock/IDs, validates labels, sanitizes paths,
+  and verifies replay. Fresh regeneration was byte-identical for all 33 files.
+- Default corpus tests replay every file three times with Docker constructors,
+  subprocess, network, real sleeps and clocks forbidden. Full unit suite:
+  272 passed, 9 opt-in skipped, 0.99s.
+- G4 still needs richer metrics/timing reports, actual Linux CI qualification
+  of capture/replay, and a final requirement review. G5 remains open.

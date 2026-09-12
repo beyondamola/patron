@@ -1,4 +1,5 @@
 import os
+import json
 
 import pytest
 from uuid import uuid4
@@ -9,6 +10,7 @@ from scenarios.registry import default_registry
 from scenarios.base import ScenarioContext
 from scenarios.result import ScenarioResultWriter
 from scenarios.runner import run_scenario
+from harness.replay import replay_capture
 
 
 pytestmark = pytest.mark.integration
@@ -29,7 +31,7 @@ def require_docker():
 def test_real_scenario(name, tmp_path, require_docker) -> None:
     scenario = default_registry().get(name)
     context = ScenarioContext(name, f"patron-test-{name.replace('_', '-')}-{uuid4().hex[:8]}",
-                              timeout_seconds=120, verbose=True, trace=True)
+                              timeout_seconds=120, verbose=True, trace=True, capture=True)
     result_path = Path("logs/scenarios") / context.scenario_id / "result.jsonl"
     result = run_scenario(scenario, context, ScenarioResultWriter(result_path))
     assert result.status == "PASSED", result.to_json()
@@ -45,3 +47,11 @@ def test_real_scenario(name, tmp_path, require_docker) -> None:
         assert not remaining.stdout, f"leaked {resource_type}: {remaining.stdout}"
     output = Path("logs/scenarios") / context.scenario_id / "patron.log"
     assert "shutdown complete" in output.read_text()
+    capture = output.with_name("capture.jsonl")
+    reports = [replay_capture(capture) for _ in range(3)]
+    assert reports[0] == reports[1] == reports[2]
+    assert reports[0]["matched"]
+    incidents = [cycle for cycle in reports[0]["cycle_results"] if cycle["triggered"]]
+    assert incidents and incidents[-1]["incident_type"] == result.expected_incident_type
+    assert incidents[-1]["final_status"] == result.expected_final_status
+    output.with_name("replay-report.json").write_text(json.dumps(reports[0], indent=2, sort_keys=True))
