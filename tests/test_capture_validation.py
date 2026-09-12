@@ -33,6 +33,17 @@ def test_real_runtime_capture_validates_and_cli_is_read_only(capture):
     assert path.read_bytes() == before
 
 
+@pytest.mark.parametrize("history", [None, {}, [None], [{"incident": {}}],
+    [{"event": "operator_control", "event_id": "a", "result": {"request_id": "b"}}],
+    [{"incident": {"incident_id": "a", "resource": "x", "status": "RESOLVED"}, "state_path": "/live"}]])
+def test_invalid_control_history_is_rejected(capture, history):
+    _, original = capture
+    rows = deepcopy(original)
+    rows[0]["payload"]["control_history"] = history
+    with pytest.raises(ValueError):
+        validate_capture(rows)
+
+
 @pytest.mark.parametrize("event,key,value,message", [
     ("observation", "observation_id", 999, "parent reference"),
     ("plan", "observation_id", 999, "observation reference"),

@@ -77,6 +77,14 @@ collector_version 1, redaction_version 1, initial state, and runtime settings
 `cycles` so shutdown persistence can be reproduced. Older captures lacking mode
 need to be recaptured; they are not silently assigned a mode.
 
+New captures may also include `control_history`: minimal state-scoped historical
+incident snapshots and durable operator request results not otherwise available
+to replay. It contains no raw audit log dumps. Current incidents remain in initial
+state. History is bounded to 1,000 entries and the same 1MB header record limit;
+exceeding either fails capture startup rather than silently dropping evidence.
+Replay seeds only its temporary audit file with this history. Older captures
+without it remain supported when their controls need no historical audit inputs.
+
 A normal cycle records `cycle_start`, zero or more paired `control` events,
 `observation`, `trigger`, and `cycle_end`. An incident can additionally record
 `transition`, `context`, `plan`, `policy`, `action_requested`, `execution`,

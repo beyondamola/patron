@@ -33,6 +33,22 @@ def test_acknowledgment_preserves_status_and_attempts(tmp_path):
     assert loaded.acknowledgment["reason"] == "Investigated"
 
 
+def test_capture_history_is_scoped_minimal_and_bounded(tmp_path, monkeypatch):
+    registry, incident, control = setup(tmp_path)
+    control.apply(request(registry, incident))
+    control.audit.log({"state_path": str(tmp_path / "unrelated.json"),
+                       "incident": {"incident_id": "unrelated", "resource": "other", "status": "RESOLVED"},
+                       "recent_logs": ["unrelated private output"]})
+    history = control.capture_history()
+    assert len(history) == 1 and history[0]["event"] == "operator_control"
+    assert set(history[0]) == {"event", "event_id", "result"}
+    assert "unrelated" not in json.dumps(history)
+    monkeypatch.setattr(control, "incidents", lambda: {
+        str(index): {"incident_id": str(index)} for index in range(1001)})
+    with pytest.raises(ValueError, match="exceeds 1000"):
+        control.capture_history()
+
+
 def test_rearm_opens_one_linked_incident_and_preserves_history(tmp_path):
     registry, incident, control = setup(tmp_path)
     control.apply(request(registry, incident, "rearm"))

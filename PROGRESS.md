@@ -514,3 +514,27 @@ and create a linked new incident only if a later collection still detects failur
   dependency_down 949820e6-8358-41e4-a3d5-e553c5fa11bf.
 - G4 final causal-evidence review/current-revision CI and G5 acceptance/handoff
   remain open. These new local results do not replace the separate Linux CI gate.
+
+## G4 historical-control replay correction (2026-09-12)
+
+- Review found that initial state alone omitted audit-only resolved incidents
+  and request results aged out of the state cache. Added minimal, state-scoped
+  control_history to new capture headers and seed it only into replay's temporary
+  audit file. Current incidents are not duplicated; raw audit logs are not copied.
+  History is bounded to 1000 entries and existing 1MB capture-record limits.
+- The regression test acknowledges an audit-only resolved incident, repeats an
+  old request retained only in audit, then applies a fresh acknowledgment. Three
+  replays match and leave original files unchanged under live-I/O prohibitions.
+  Additional tests reject malformed history and prove unrelated-state exclusion.
+- This test also found a macOS temporary-directory alias mismatch. Replay now
+  resolves its temporary root before assigning state/audit evidence paths, so
+  state-scoped audit lookup works consistently. The initial fixture was corrected
+  to start a fresh runtime with advancing observations, as the real CLI does;
+  enabling capture mid-window is not a supported runtime workflow.
+- Full local command python3 -m pytest -q: 298 passed, 9 opt-in skipped, 6.73s.
+- Existing CI run 34673684287 for 545a6ac was observed with both unit lanes passed
+  and both Docker jobs in progress. The later status request was denied by the
+  automatic approval service because of its usage limit. Its final result is
+  unverified; no duplicate CI run or alternate access route was used.
+- Current historical-control changes still require Docker/CI requalification.
+  G4/G5 remain open, with no claim that older CI evidence proves these changes.

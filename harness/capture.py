@@ -73,7 +73,7 @@ def normalized_snapshot(snapshot: ContainerSnapshot, origin: float) -> dict:
 class CaptureWriter:
     def __init__(self, path: str | Path, *, config: DetectorConfig, initial_state: dict,
                  clock: Clock | None = None, run_id: str | None = None,
-                 runtime_settings: dict | None = None) -> None:
+                 runtime_settings: dict | None = None, control_history: list | None = None) -> None:
         self.clock = clock or SystemClock()
         self.origin = self.clock.monotonic()
         self.run_id = run_id or str(uuid4())
@@ -87,7 +87,8 @@ class CaptureWriter:
             self.emit("run_start", {"config": config.to_dict(), "config_fingerprint": config.fingerprint,
                       "initial_state": initial_state, "collector_version": 1,
                       "runtime_settings": runtime_settings or {},
-                      "redaction_version": REDACTION_VERSION})
+                      "redaction_version": REDACTION_VERSION,
+                      **({"control_history": control_history} if control_history is not None else {})})
         except BaseException:
             self.handle.close()
             raise

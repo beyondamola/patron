@@ -87,6 +87,53 @@ def test_collector_exception_is_diagnostic_capture_not_fabricated_replay(tmp_pat
         replay_capture(path)
 
 
+def test_audit_only_acknowledgment_and_old_request_replay(tmp_path, monkeypatch):
+    from uuid import uuid4
+    from harness.control import ControlRequest, IncidentControl
+    from harness.capture import read_capture
+
+    clock = FixtureClock()
+    registry = IncidentRegistry(tmp_path / "state.json", clock=clock)
+    audit = AuditLogger(tmp_path / "audit.jsonl")
+    runtime = PatronRuntime(container_name="target", registry=registry, audit_logger=audit,
+        collector=Mock(collect=Mock(return_value=ContainerSnapshot("target", True, False, "exited", {}, oom_killed=True))),
+        executor=Mock(execute=Mock(return_value={"action": "escalate", "success": True})))
+    incident_id = runtime.process_once()["incident"]["incident_id"]
+    incident = registry.incidents["target"]
+    registry.mark_resolved(incident)
+    audit.log(runtime._audit_record(incident, {"reason": "recovered"}, None, None, None, None))
+    registry.persist()
+    control = IncidentControl(registry, audit)
+    old = ControlRequest(str(uuid4()), incident_id, registry.revision, "acknowledge", "old request", "tester", clock.utc_now())
+    control.apply(old)
+    # Model a request retained only by the durable audit after result compaction.
+    registry.control_results.clear()
+    registry.persist()
+    path = tmp_path / "history.jsonl"
+    def collected():
+        clock.offset += 1
+        return ContainerSnapshot("target", True, True, "running", {}, observed_monotonic=clock.offset)
+    runtime = PatronRuntime(container_name="target", registry=registry, audit_logger=audit,
+        capture_path=path, collector=Mock(collect=collected))
+    runtime.process_once()
+    control.submit(old)
+    runtime.process_once()
+    fresh = ControlRequest(str(uuid4()), incident_id, registry.revision, "acknowledge", "new request", "tester", clock.utc_now())
+    control.submit(fresh)
+    runtime.process_once()
+    runtime.finish_capture()
+    header = read_capture(path)[0]["payload"]
+    assert header["control_history"] and not header["initial_state"]["incidents"]
+    originals = {p: p.read_bytes() for p in tmp_path.iterdir() if p.is_file()}
+    def forbidden(*args, **kwargs):
+        raise AssertionError("live dependency during historical control replay")
+    for target in ("harness.runtime.DockerCollector", "harness.runtime.DockerExecutor", "time.sleep"):
+        monkeypatch.setattr(target, forbidden)
+    reports = [replay_capture(path) for _ in range(3)]
+    assert reports[0] == reports[1] == reports[2]
+    assert all(p.read_bytes() == original for p, original in originals.items())
+
+
 def test_operator_acknowledgment_and_rearm_replay_through_control_inbox(tmp_path):
     from uuid import uuid4
     from harness.control import ControlRequest, IncidentControl

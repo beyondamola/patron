@@ -126,6 +126,21 @@ class IncidentControl:
                 return record.get("result")
         return None
 
+    def capture_history(self) -> list[dict]:
+        """Minimal state-scoped inputs needed for historical operator requests."""
+        current_ids = {incident.incident_id for incident in self.registry.incidents.values()}
+        history = [{"incident": {key: value for key, value in incident.items()
+                                  if key not in {"evidence_path", "suppressed"}}}
+                   for incident in self.incidents().values() if incident["incident_id"] not in current_ids]
+        for record in audit_records(self.audit.path):
+            if (record.get("event") == "operator_control"
+                    and record.get("state_path") == str(self.registry.state_path)):
+                history.append({"event": "operator_control", "event_id": record["event_id"],
+                                "result": record["result"]})
+        if len(history) > 1000:
+            raise ValueError("capture control history exceeds 1000 entries; capture was not started")
+        return history
+
     def submit(self, request: ControlRequest) -> None:
         request.validate()
         self.inbox.mkdir(parents=True, exist_ok=True)

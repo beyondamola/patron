@@ -195,12 +195,15 @@ def replay_capture(path: str | Path) -> dict:
         raise ReplayMismatch("capture lacks runtime mode needed to reproduce shutdown persistence; record a new capture")
     cycles = []
     with TemporaryDirectory(prefix="patron-replay-") as directory:
-        root = Path(directory)
+        root = Path(directory).resolve()
         state = deepcopy(header["initial_state"])
         state["audit_path"] = str(root / "audit.jsonl")
         for event in state["outbox"].values():
             event["state_path"] = str(root / "state.json")
         atomic_json(root / "state.json", state)
+        audit = AuditLogger(root / "audit.jsonl")
+        for evidence in header.get("control_history", []):
+            audit.log({**deepcopy(evidence), "state_path": str(root / "state.json")})
 
         def incident_id():
             return stream.expected("transition")["payload"]["incident"]["incident_id"]
@@ -209,7 +212,7 @@ def replay_capture(path: str | Path) -> dict:
                                     clock=stream.clock, id_factory=incident_id)
         runtime = PatronRuntime(container_name=settings["target"], dry_run=settings["dry_run"],
             config=DetectorConfig(**header["config"]), registry=registry,
-            audit_logger=AuditLogger(root / "audit.jsonl"), collector=RecordedCollector(stream),
+            audit_logger=audit, collector=RecordedCollector(stream),
             planner=RecordedPlanner(stream), executor=RecordedExecutor(stream), verifier=RecordedVerifier(stream))
         runtime.capture = ReplaySink(stream)
         while stream.peek() and stream.peek()["event"] != "run_end":

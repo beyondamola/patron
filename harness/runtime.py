@@ -64,6 +64,7 @@ class PatronRuntime:
     def _start_capture(self) -> None:
         if self.capture_path is not None and self.capture is None:
             self.capture = CaptureWriter(self.capture_path, config=self.config,
+                control_history=IncidentControl(self.registry, self.audit_logger).capture_history() or None,
                 initial_state=self.registry.export_state(), clock=self.clock,
                 runtime_settings={"target": self.container_name, "dry_run": self.dry_run,
                                   "mode": self._capture_mode,

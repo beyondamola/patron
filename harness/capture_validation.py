@@ -71,6 +71,20 @@ def validate_capture(records: list[dict]) -> dict:
     """Check payloads and causal ordering after read_capture envelope validation."""
     header = records[0]["payload"]
     validate_state(header.get("initial_state"))
+    history = header.get("control_history", [])
+    require(isinstance(history, list) and len(history) <= 1000, "control history must be a bounded list")
+    for evidence in history:
+        require(isinstance(evidence, dict), "control history entry must be an object")
+        if set(evidence) == {"incident"}:
+            incident = evidence["incident"]
+            require(isinstance(incident, dict), "historical incident must be an object")
+            for key in ("incident_id", "resource", "status"):
+                require(isinstance(incident.get(key), str) and bool(incident[key]), f"historical incident {key}")
+        else:
+            require(set(evidence) == {"event", "event_id", "result"}
+                    and evidence["event"] == "operator_control", "historical request result fields")
+            require(isinstance(evidence["event_id"], str) and isinstance(evidence["result"], dict)
+                    and evidence["result"].get("request_id") == evidence["event_id"], "historical request identity")
     known_incidents = {value["incident_id"] for value in header["initial_state"]["incidents"].values()}
     require(header.get("collector_version") == 1 and header.get("redaction_version") == 1, "collector/redaction version")
     settings = header.get("runtime_settings")
