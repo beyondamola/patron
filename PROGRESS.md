@@ -10,8 +10,8 @@ No gate is complete solely because its local tests pass.
 | G0 | Verified | Unit baseline: 56 passed, 8 skipped. Real Docker suite: 8 passed, 56 deselected, 48.71 seconds. Normal CLI baseline: all eight PASSED; no simulation containers/networks remained. Checkpoint 8b1ca31. |
 | G1 | Verified | Commit 557f88f passed three independent full workflows on Linux amd64/arm64. See G1_VERIFICATION.md. |
 | G2 | Verified | Commit 6f0498c passed Linux amd64/arm64 CI including real operator processes; local 115 unit tests and eight scenarios passed. See G2_VERIFICATION.md. |
-| G3 | Not started | Sustained detection and false-positive corpus pending. |
-| G4 | Not started | Capture/replay and fake shadow comparison pending. |
+| G3 | Verified | Sustained detection, 26-case/53-sample corpus, all-eight local/CI scenarios; see G3_VERIFICATION.md. |
+| G4 | Final review | Capture, 33-file replay corpus, comparison/fake shadow, report metrics and lab provenance implemented; local and Linux capture/replay evidence below. Final causal-evidence review and current-revision CI remain. |
 | G5 | Not started | Full qualification pending. |
 
 ## Baseline environment
@@ -44,8 +44,12 @@ No gate is complete solely because its local tests pass.
 | CI-1 immutable multiarch images | scenarios/images.py; manifests and actual Linux amd64/arm64 execution; fresh virtualenv install | Verified |
 | CI-2 actual Linux CI | Runs 34498811932, 34499033848, 34499045400 succeeded independently at 557f88f | Verified |
 | OPS-1 through OPS-4 | State/control tests, real operator workflow, CI 34536159885, G2_VERIFICATION.md | Verified |
-| DET-1 through DET-5 | Current single-sample behavior documented | Pending |
-| REP-1 through REP-7 | Current audit lacks full observation stream | Pending |
+| DET-1 through DET-5 | G3_VERIFICATION.md maps config, sustained windows, unknowns, specific evidence, priority, and live scenarios | Verified |
+| REP-1/REP-2 | capture.py, capture_validation.py, runtime.py; test_capture.py, test_capture_validation.py, all-eight live capture | Implemented; final review |
+| REP-3/REP-4 | replay.py, comparison.py; test_replay.py, test_comparison.py; three identical replays per fixture under no-I/O guards | Verified behavior; final review |
+| REP-5 | replay_metrics.py, replay_provenance.py, main.py; test_replay_reports.py, test_replay_provenance.py | Local tests and retained real captures verified |
+| REP-6 | tests/fixtures/replay/manifest.json; test_replay_corpus.py; 33 captures, three runs each | Verified |
+| REP-7 | shadow.py, test_shadow.py, SHADOW_EVALUATION.md | Fake-only boundary verified; no provider calls |
 
 This record will be updated with test names, commit IDs, CI run URLs, and artifact
 locations as implementation advances. Historical VERIFICATION.md is not rewritten.
@@ -466,3 +470,47 @@ and create a linked new incident only if a later collection still detects failur
   evidence from open final review. G4 still needs its requirement-by-requirement
   review, including provenance/known-onset reporting and incomplete causal
   evidence behavior. G5 final qualification and handoff are not complete.
+
+## G4 lab provenance and local workflow qualification (2026-09-12 UTC)
+
+- Added optional `--scenario-results` to replay run/compare. The pure reader in
+  harness/replay_provenance.py correlates incident ID, target, type, and effective
+  configuration. Unknown onset stays null; lab-known UTC injection-to-creation
+  delay is separate from captured runtime stage latency and candidate outcomes.
+  Duplicate/mismatched/oversized/incomplete results fail without overwriting inputs.
+- Existing CI evidence revealed restart_loop injection precedes capture startup.
+  The reader now explicitly marks this valid lab-known onset instead of rejecting
+  it or fabricating a later injection time. All 16 retained Linux captures from
+  run 34671599363 correlate with their scenario-local result.jsonl files.
+- Added an exact replay preflight for exception-only collection cycles: preserve
+  the diagnostic capture, reject exact replay with missing collector observation.
+  Normalized failed-collection snapshots continue to replay. No synthetic healthy
+  observation or exception outcome is substituted.
+- Added STATE_AND_CAPTURE_FORMATS.md and README provenance commands. Corrected
+  the progress overview's stale G3/G4 entries; historical checkpoints stay intact.
+- `python3 -m pytest -q`: 290 passed, 9 opt-in skipped, 2.35s. New tests cover
+  known/unknown/pre-capture onset, correlation mismatches, ambiguous inputs,
+  output alias protection, candidate outcome isolation, and collector exceptions.
+- `PATRON_RUN_DOCKER_INTEGRATION=1 python3 -m pytest -m integration
+  --junitxml=artifacts/raw/g4-provenance-integration.xml -q`: all 8 passed,
+  290 deselected, 67.27s. Each includes three identical exact replays and lab
+  provenance checks, graceful shutdown evidence, and resource cleanup assertions.
+- `python3 -m scenarios list` with Docker access: all eight supported. Sandboxed
+  listing correctly reported Docker unavailable because of daemon permissions;
+  that was not used to claim the live environment was unavailable.
+- `python3 -m scenarios run-all --verbose --capture`: all eight PASSED. Retained
+  log artifacts/raw/g4-provenance-run-all.log, approximately 04:38-04:40 UTC.
+  Replayed each normal CLI capture three times and correlated global lab results.
+  Each retained Patron log contains shutdown complete. Separate read-only Docker
+  queries found no containers/networks/volumes for these eight scenario UUIDs;
+  `pgrep -fl 'python.* -u -m harness watch'` found no matching managed processes.
+- Normal CLI IDs: stopped 36bc5b1c-f7c8-4ace-9603-74dd6e6ba970;
+  unhealthy 3a083faa-fed2-4fda-b09f-22f5a1613f11;
+  restart_loop 4a3750cd-4453-40b9-8aef-f764352c2aa4;
+  oom_killed 8f19eb1d-36c1-4ed9-b947-c85389716a3b;
+  high_cpu 795a36cd-31be-4db5-98a4-31ded3f1bee3;
+  disk_full be1318bf-c6d3-4d3a-86de-95e9a3407b9f;
+  bad_config efd3e44c-7fa5-4f73-8999-4ad815516bdf;
+  dependency_down 949820e6-8358-41e4-a3d5-e553c5fa11bf.
+- G4 final causal-evidence review/current-revision CI and G5 acceptance/handoff
+  remain open. These new local results do not replace the separate Linux CI gate.

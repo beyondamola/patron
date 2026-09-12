@@ -530,6 +530,22 @@ separate from recorded runtime stage latency. Exclude `report_metadata` when
 comparing semantic reports across repeated CLI runs. The pure replay/comparison
 APIs do not read a real clock and return deterministic semantic content only.
 
+Add lab-known injection timing without changing runtime measurements:
+
+```bash
+python -m harness replay run logs/scenarios/<id>/capture.jsonl \
+  --scenario-results logs/scenario_results.jsonl --output replay-with-lab.json
+```
+
+Integration artifacts use the scenario-local `result.jsonl` instead of the
+global results file. `replay compare` accepts the same optional argument.
+Correlation checks incident ID, target, type, and configuration; mismatches and
+duplicates fail. `lab_provenance` reports injection-to-incident creation delay
+using aligned UTC clocks. Restart-loop injection can precede runtime startup
+and is marked accordingly. This is not candidate recovery or latency evidence.
+See [State and Capture Formats](STATE_AND_CAPTURE_FORMATS.md) for schema versions,
+limits, incomplete-capture behavior, and interpretation of report metrics.
+
 `harness run`, `harness watch`, `harness inspect-docker`, `scenarios run`, and
 `scenarios run-all` accept `--config path/to/detectors.json`. Omitted settings
 use validated defaults. For example:

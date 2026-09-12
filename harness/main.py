@@ -129,7 +129,9 @@ def build_parser() -> argparse.ArgumentParser:
     replay_run = replay_commands.add_parser("run", help="reproduce recorded decisions with execution disabled")
     replay_run.add_argument("capture_path")
     replay_run.add_argument("--output", required=True)
+    replay_run.add_argument("--scenario-results", help="optional correlated lab JSONL for known injection timing")
     compare = replay_commands.add_parser("compare", help="compare offline detector/planner recommendations")
+    compare.add_argument("--scenario-results", help="optional correlated lab JSONL; never candidate outcome proof")
     compare.add_argument("capture_path")
     compare.add_argument("--baseline-config", required=True)
     compare.add_argument("--candidate-config", required=True)
@@ -156,11 +158,16 @@ def _main(argv: list[str] | None = None) -> int:
             from .shadow import FakeCandidate
             output = Path(args.output)
             sources = (args.capture_path, args.baseline_config, args.candidate_config)
+            if args.scenario_results:
+                sources += (args.scenario_results,)
             if output.resolve() in {Path(source).resolve() for source in sources}:
                 raise ValueError("comparison output must not overwrite an input")
             started = perf_counter()
             report = compare_capture(args.capture_path, DetectorConfig.load(args.baseline_config),
                 DetectorConfig.load(args.candidate_config), FakeCandidate(args.fake_candidate))
+            if args.scenario_results:
+                from .replay_provenance import lab_provenance
+                report["lab_provenance"] = lab_provenance(args.capture_path, args.scenario_results)
             report["report_metadata"] = {"computation_seconds": perf_counter() - started,
                 "scope": "capture validation and comparison; excludes output serialization",
                 "semantic": False}
@@ -176,8 +183,13 @@ def _main(argv: list[str] | None = None) -> int:
             output = Path(args.output)
             if output.resolve() == Path(args.capture_path).resolve():
                 raise ValueError("replay output must not overwrite input capture")
+            if args.scenario_results and output.resolve() == Path(args.scenario_results).resolve():
+                raise ValueError("replay output must not overwrite scenario results")
             started = perf_counter()
             report = replay_capture(args.capture_path)
+            if args.scenario_results:
+                from .replay_provenance import lab_provenance
+                report["lab_provenance"] = lab_provenance(args.capture_path, args.scenario_results)
             report["report_metadata"] = {"computation_seconds": perf_counter() - started,
                 "scope": "capture validation and exact replay; excludes output serialization",
                 "semantic": False}

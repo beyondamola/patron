@@ -11,6 +11,7 @@ from scenarios.base import ScenarioContext
 from scenarios.result import ScenarioResultWriter
 from scenarios.runner import run_scenario
 from harness.replay import replay_capture
+from harness.replay_provenance import lab_provenance
 
 
 pytestmark = pytest.mark.integration
@@ -54,4 +55,8 @@ def test_real_scenario(name, tmp_path, require_docker) -> None:
     incidents = [cycle for cycle in reports[0]["cycle_results"] if cycle["triggered"]]
     assert incidents and incidents[-1]["incident_type"] == result.expected_incident_type
     assert incidents[-1]["final_status"] == result.expected_final_status
+    provenance = lab_provenance(capture, result_path)
+    assert provenance["incidents"][0]["incident_id"] == result.patron_incident_id
+    assert provenance["incidents"][0]["detection_latency_seconds"] is not None
+    reports[0]["lab_provenance"] = provenance
     output.with_name("replay-report.json").write_text(json.dumps(reports[0], indent=2, sort_keys=True))

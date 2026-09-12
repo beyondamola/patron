@@ -70,6 +70,23 @@ def test_changed_plan_is_a_replay_mismatch_before_execution(tmp_path):
         replay_capture(path)
 
 
+def test_collector_exception_is_diagnostic_capture_not_fabricated_replay(tmp_path):
+    from harness.capture import read_capture
+    from harness.capture_validation import validate_capture
+    from harness.replay import ReplayMismatch
+
+    path = tmp_path / "exception.jsonl"
+    runtime = PatronRuntime(container_name="target", capture_path=path,
+        collector=Mock(collect=Mock(side_effect=RuntimeError("collector crashed"))),
+        registry=IncidentRegistry(tmp_path / "state.json"),
+        audit_logger=AuditLogger(tmp_path / "audit.jsonl"))
+    assert runtime.process_once()["error"] == "collector crashed"
+    runtime.finish_capture()
+    validate_capture(read_capture(path))
+    with pytest.raises(ReplayMismatch, match="missing collector observation"):
+        replay_capture(path)
+
+
 def test_operator_acknowledgment_and_rearm_replay_through_control_inbox(tmp_path):
     from uuid import uuid4
     from harness.control import ControlRequest, IncidentControl

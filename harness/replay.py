@@ -179,6 +179,15 @@ class RecordedVerifier:
 def replay_capture(path: str | Path) -> dict:
     records = read_capture(path)
     validation = validate_capture(records)
+    observed = False
+    for record in records:
+        if record["event"] == "cycle_start":
+            observed = False
+        elif record["event"] == "observation":
+            observed = True
+        elif record["event"] == "cycle_end" and not observed:
+            raise ReplayMismatch("missing collector observation: exception-only cycles cannot be exactly replayed; "
+                                 "the capture remains diagnostic evidence, not a complete replay input")
     stream = EventStream(records)
     header = records[0]["payload"]
     settings = header["runtime_settings"]
