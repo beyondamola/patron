@@ -523,9 +523,10 @@ suppression, cooldown boundaries, and initial-state restart continuity.
 The committed corpus contains 33 sanitized synthetic captures with explicit
 origins and expected outcomes (`tests/fixtures/replay/manifest.json`). All eight
 real Docker captures have also passed three identical offline replays on local
-macOS arm64 and Linux CI on both amd64 and arm64. G4's final requirements review
-and G5 handoff remain open. Unsupported event sequences fail rather than claim
-a matching replay.
+macOS arm64 and Linux CI on both amd64 and arm64. See [G5_VERIFICATION.md](G5_VERIFICATION.md)
+for qualified revisions, actual test evidence, retained failures, and limitations;
+see [OPERATOR_RUNBOOK.md](OPERATOR_RUNBOOK.md) for operational handoff.
+Unsupported event sequences fail rather than claim a matching replay.
 
 Offline comparison is available:
 

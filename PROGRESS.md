@@ -11,8 +11,8 @@ No gate is complete solely because its local tests pass.
 | G1 | Verified | Commit 557f88f passed three independent full workflows on Linux amd64/arm64. See G1_VERIFICATION.md. |
 | G2 | Verified | Commit 6f0498c passed Linux amd64/arm64 CI including real operator processes; local 115 unit tests and eight scenarios passed. See G2_VERIFICATION.md. |
 | G3 | Verified | Sustained detection, 26-case/53-sample corpus, all-eight local/CI scenarios; see G3_VERIFICATION.md. |
-| G4 | Final review | Capture, 33-file replay corpus, comparison/fake shadow, report metrics and lab provenance implemented; local and Linux capture/replay evidence below. Final causal-evidence review and current-revision CI remain. |
-| G5 | Not started | Full qualification pending. |
+| G4 | Verified | Capture/replay, historical controls, 33-fixture corpus, honest comparison/fake shadow and provenance; final code c1cc647 passes local and Linux CI. See G4_VERIFICATION.md. |
+| G5 | Verified | c1cc647: 304 unit tests, nine local Docker/operator cases, all-eight normal CLI, Linux amd64/arm64 CI and repeated offline replay. See G5_VERIFICATION.md for full evidence, limits, and handoff. |
 
 ## Baseline environment
 
@@ -45,14 +45,15 @@ No gate is complete solely because its local tests pass.
 | CI-2 actual Linux CI | Runs 34498811932, 34499033848, 34499045400 succeeded independently at 557f88f | Verified |
 | OPS-1 through OPS-4 | State/control tests, real operator workflow, CI 34536159885, G2_VERIFICATION.md | Verified |
 | DET-1 through DET-5 | G3_VERIFICATION.md maps config, sustained windows, unknowns, specific evidence, priority, and live scenarios | Verified |
-| REP-1/REP-2 | capture.py, capture_validation.py, runtime.py; test_capture.py, test_capture_validation.py, all-eight live capture | Implemented; final review |
-| REP-3/REP-4 | replay.py, comparison.py; test_replay.py, test_comparison.py; three identical replays per fixture under no-I/O guards | Verified behavior; final review |
+| REP-1/REP-2 | capture.py, capture_validation.py, runtime.py; test_capture.py, test_capture_validation.py, all-eight live capture | Verified; G4_VERIFICATION.md |
+| REP-3/REP-4 | replay.py, comparison.py; test_replay.py, test_comparison.py; three identical replays per fixture under no-I/O guards | Verified; G4_VERIFICATION.md |
 | REP-5 | replay_metrics.py, replay_provenance.py, main.py; test_replay_reports.py, test_replay_provenance.py | Local tests and retained real captures verified |
 | REP-6 | tests/fixtures/replay/manifest.json; test_replay_corpus.py; 33 captures, three runs each | Verified |
 | REP-7 | shadow.py, test_shadow.py, SHADOW_EVALUATION.md | Fake-only boundary verified; no provider calls |
 
-This record will be updated with test names, commit IDs, CI run URLs, and artifact
-locations as implementation advances. Historical VERIFICATION.md is not rewritten.
+The entries below are historical checkpoints; later qualification supersedes
+their pending statuses without erasing their failures. See G5_VERIFICATION.md
+for final acceptance. Historical VERIFICATION.md is not rewritten.
 
 ## G1 implementation checks
 
@@ -609,3 +610,39 @@ and create a linked new incident only if a later collection still detects failur
   zero failures/errors/skips. Scenario checks include full incident history,
   no hidden restart in escalation-only cases, exact replay, provenance, and cleanup.
   Linux CI remains required before concluding the fixture correction is qualified.
+
+## G5 final qualification (2026-09-13)
+
+- Corrected fixture revision 4265487 passed three independent full workflows:
+  34741568850, 34741772883, 34741791860. Downloaded XML independently confirms
+  301 units on Python 3.9/3.12 and eight scenarios plus one operator case on each
+  Linux architecture, zero failures/errors/skips. All 16 scenario/replay reports
+  per workflow match. Original OOM failures remain failed and retained.
+- Final failure-path review found injection exceptions before InjectionResult
+  could be mislabeled SETUP_FAILED. Revision c1cc647 tracks execution phase and
+  tests setup/injection/observation errors while preserving a primary error when
+  cleanup also fails. No runtime action or successful scenario behavior changed.
+- Final local units: 304 passed, nine opt-in skipped, 10.927s; evidence
+  artifacts/raw/g5-final-unit.xml. Initial Docker command omitted the opt-in and
+  skipped nine cases, retained as artifacts/raw/g5-final-docker.xml, not a pass.
+  Explicitly enabled qualification passed nine cases, zero failures/errors/skips,
+  99.64s; artifacts/raw/g5-final-docker-enabled.xml.
+- c1cc647 CI run 34742002479 passed all four jobs: 304 units on each supported
+  Python lane; eight Docker scenarios plus operator on amd64 and arm64, zero
+  skips. Downloaded artifacts/g5-final-qualified reviewed for counts, correct
+  scenario fields and replay matches. All 16 captures independently replayed
+  three times and reproduced retained reports including lab provenance.
+- Normal final CLI run-all --verbose --capture passed all eight at
+  06:11:51-06:13:06 UTC. IDs and outcomes are in G5_VERIFICATION.md and the local
+  scenario JSONL. All eight captures replayed three times, provenance matched,
+  shutdown completion appeared in all logs. Read-only scenario-ID Docker queries
+  found no owned containers/networks/volumes. Authorized process query found no
+  managed watch processes. No unrelated resources were deleted.
+- scenarios list shows all eight supported. Detector corpus remains 26 cases,
+  53 observations, zero false positives/negatives; these are synthetic accuracy
+  checks, not a production accuracy estimate.
+- G4 report finalized; G5_VERIFICATION.md supplies the acceptance matrix,
+  environment split, exact evidence, original failures and limitations.
+  OPERATOR_RUNBOOK.md, STATE_AND_CAPTURE_FORMATS.md, README.md and
+  SHADOW_EVALUATION.md provide the handoff. G0-G5 are verified. Real providers
+  and any expansion of remediation authority remain separately authorized work.

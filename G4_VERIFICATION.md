@@ -1,7 +1,8 @@
 # G4 Verification: Capture, Replay, and Fake Shadow
 
-Date: 2026-09-12. Status: CI uncovered an OOM classification race; correction under qualification.
-Implementation checkpoint: f8f5ce7. This report does not declare G5 complete.
+Date: 2026-09-13. Status: verified, including the OOM correction and final code CI.
+Qualified code checkpoint: c1cc647. See G5_VERIFICATION.md for final handoff.
+Earlier checkpoints and failed runs below are retained as historical evidence.
 
 ## Evidence Inventory
 
@@ -64,12 +65,7 @@ attest that a captured observation is true or guarantee exact replay eligibility
 - No real provider SDKs, credentials, billable calls, or model execution were added.
   Future real evaluation requires the separate explicit approval gate.
 
-## Remaining Gate Work
-
-Confirm the current revision's actual Linux CI artifacts,
-then finalize G4 status. G5 still requires the consolidated final acceptance
-matrix, operator runbook/handoff review, current cross-cutting qualification,
-and explicit remaining-limitations report. Do not infer those from this inventory.
+## Correction History and Final Qualification
 
 The original failed-run artifacts are preserved under artifacts/g4-history-failed.
 The correction withholds generic restart on exit 137 without positive OOM evidence;
@@ -82,10 +78,20 @@ confirmation period, not merely a short delay. The runtime correctly withheld
 generic restart, and the lab reported INJECTION_FAILED. Its artifacts remain in
 artifacts/g4-oom-guard-failed and the failed-job log is
 artifacts/raw/g4-oom-guard-ci-failure.log. A supervised child-allocation fixture is
-now under qualification; OOM proof and expected policy have not been weakened.
+was subsequently qualified; OOM proof and expected policy were not weakened.
 
 On 2026-09-13 the supervised fixture passed local focused OOM qualification
 (17.25s) and all eight scenarios plus the real operator workflow (9 cases,
 101.08s). Strict XML verification found no failures/errors/skips. Evidence:
 artifacts/raw/g5-supervised-full.xml. Unit result: 301 passed, 9 opt-in skipped.
-This does not substitute for the outstanding Linux qualification.
+This local evidence was followed by three independent successful workflows at
+4265487: 34741568850, 34741772883, and 34741791860. Downloaded reports show exactly
+eight scenarios plus one operator case on each Linux architecture, zero skips,
+and 16 matching scenario/replay reports per workflow.
+
+Final code c1cc647 also passed workflow 34742002479: 304 unit cases on Python 3.9
+and 3.12, and all eight scenarios plus operator qualification on both Linux
+architectures, with zero skipped cases. Artifacts are retained under
+artifacts/g5-final-qualified. Local final code passed 304 unit tests and nine
+real Docker/operator cases in 99.64s. G4 requirements mapping above is complete;
+the operational handoff and consolidated limits are in G5_VERIFICATION.md.

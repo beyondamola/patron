@@ -47,5 +47,6 @@ are available. CLI `report_metadata.computation_seconds` measures the complete
 validation/comparison operation, not isolated candidate inference. Recorded
 runtime metrics remain separate. Candidate-specific inference timing is not
 measured by the pure offline API; do not present total comparison time as model
-latency. Final G4 requirements review and G5 qualification remain open.
+latency. G4's fake-only boundary is verified; G5_VERIFICATION.md records the
+final qualification evidence and remaining limitations.
 This document is not authorization to make provider calls.
