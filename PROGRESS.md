@@ -576,3 +576,36 @@ and create a linked new incident only if a later collection still detects failur
   correction: 1 passed, 308 deselected, 13.80s; evidence
   artifacts/raw/g4-oom-guard-operator.xml. New all-eight/CI qualification remains
   required; the original failed workflow is not replaced or retried to green.
+
+## OOM fixture observability correction (2026-09-13)
+
+- Run 34715967546 failed OOM injection confirmation on amd64's scenario lane
+  and arm64's operator lane: Docker remained exited/137/OOMKilled=false for the
+  entire 20-second confirmation window. The new safety guard withheld restart;
+  the lab correctly did not infer OOM from exit code. Evidence is retained in
+  artifacts/g4-oom-guard-failed and artifacts/raw/g4-oom-guard-ci-failure.log.
+- Prior local all-eight safety-guard suite passed: 8 cases, 68.84s, evidence
+  artifacts/raw/g4-oom-guard-integration.xml. Normal run-all also passed all eight
+  in artifacts/raw/g5-run-all.log. These local successes did not override CI.
+- Supervised OOM allocation now leaves a low-memory PID 1 alive for five seconds
+  after its high-memory child exits. Strict 32MiB memory/swap limits remain;
+  one CPU and 32-process caps are explicit. Docker OOMKilled=true remains the
+  mandatory injection predicate, with no state mutation or fabricated metrics.
+- Local focused live case passed: 1 case, 17.25s, evidence
+  artifacts/raw/g5-supervised-oom.xml. Scenario
+  df685cb7-1140-43df-b1e8-2f91dbf283be captured OOMKilled=true while its supervisor
+  was running and exactly one requested action: escalate. Owned cleanup passed.
+- Unit suite: 301 passed, 9 opt-in skipped, 11.52s. New fixture test checks the
+  supervisor command, required ownership labels, and all resource caps.
+- The first live attempt was denied by approval-service usage limits; it did not
+  run. Access later resumed and the focused result above is the actual execution.
+- Added OPERATOR_RUNBOOK.md and corrected README's stale single-sample CPU claim.
+  Full local/CI qualification of the supervised fixture is still pending.
+
+- Combined supervised-fixture qualification completed: 9 passed, 301 deselected,
+  101.08s. Command: PATRON_RUN_DOCKER_INTEGRATION=1 python3 -m pytest
+  -m 'integration or operator_integration' --junitxml=artifacts/raw/g5-supervised-full.xml -q.
+  Strict XML validation confirms exactly eight scenarios plus one operator case,
+  zero failures/errors/skips. Scenario checks include full incident history,
+  no hidden restart in escalation-only cases, exact replay, provenance, and cleanup.
+  Linux CI remains required before concluding the fixture correction is qualified.

@@ -220,9 +220,13 @@ class DockerClient:
 
     def create_oom_container(self, name: str, labels: dict[str, str]) -> None:
         self._remove_existing_simulation_or_fail(name)
-        args = ["run", "-d", "--name", name, "--memory", "32m", "--memory-swap", "32m"]
+        args = ["run", "-d", "--name", name, "--memory", "32m", "--memory-swap", "32m",
+                "--cpus", "1", "--pids-limit", "32"]
         self._append_labels(args, labels)
-        args.extend([ALPINE, "sh", "-c", "while [ ! -f /tmp/inject-oom ]; do sleep 0.1; done; exec awk 'BEGIN{s=\"x\"; while(1){s=s s}}'"])
+        # Keep PID 1 alive briefly after the high-memory child dies, so the OOM
+        # event can be observed before task teardown. Exit status is not proof of OOM.
+        args.extend([ALPINE, "sh", "-c", "while [ ! -f /tmp/inject-oom ]; do sleep 0.1; done; "
+                     "awk 'BEGIN{s=\"x\"; while(1){s=s s}}'; code=$?; sleep 5; exit \"$code\""])
         self.run(args)
 
     def create_cpu_container(self, name: str, labels: dict[str, str]) -> None:

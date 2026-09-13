@@ -283,6 +283,14 @@ restart while exit 137 has no confirmed OOM cause. Subsequent OOM evidence trigg
 the normal escalation. If the cause remains unknown, trace explains the rejected
 restart; investigate manually instead of treating the container as recovered.
 
+The OOM lab fixture uses a 32MiB memory/swap cap, one CPU, and a 32-process limit.
+A low-memory shell supervises the allocating child and stays alive for five
+seconds after it exits, allowing Docker to report the OOM event before teardown.
+Injection still requires `OOMKilled=true`; neither the child's exit code nor a
+log message is accepted as a substitute. An OOM flag can therefore be observed
+while the supervisor is still running. Escalation is the expected outcome, not
+a claim that memory pressure was repaired.
+
 Restart-loop detection requires `restart_count >= 3` in the collector output. The restart-loop scenario waits for Docker's restart count to cross that threshold before it claims injection succeeded.
 
 If Patron and a scenario use different container names, detection will fail. Compare the scenario's verbose pre/post state with `inspect-docker` output to verify the same container id and labels.
@@ -457,7 +465,19 @@ PATRON_RUN_DOCKER_INTEGRATION=1 python -m pytest -m operator_integration
 It is also required in both CI Docker jobs, independently of the exact eight-case
 scenario report. Default tests skip both types of integration tests.
 
-This remains a local, single-target MVP. Resource statistics are sampled once per cycle; CPU detection does not yet require sustained load. Disk inspection uses `df` inside the container (unavailable tools produce an unknown metric). `patron.disk_path` and `patron.dependency` are optional measurement hints, not ownership requirements; default disk monitoring uses `/tmp`. Log classification uses bounded recent text patterns rather than application-specific parsers. Memory usage is currently unavailable/null. Only the lab's known unhealthy startup behavior is proven to recover on restart.
+This remains a local, single-target MVP. Resource statistics are sampled once per
+cycle; CPU detection requires the sustained count-and-duration window documented
+below. Disk inspection uses `df` inside the container; unavailable tools produce
+an unknown metric. Explicit configuration takes precedence over optional
+`patron.disk_path` and `patron.dependency` measurement hints. These labels are not
+ownership requirements; the default disk path is `/tmp`. Log classification uses
+bounded, timestamp-filtered patterns rather than application-specific parsers.
+Memory usage remains unavailable/null. Only the lab's known unhealthy startup
+behavior is proven to recover on restart.
+
+See [Operator Runbook](OPERATOR_RUNBOOK.md) for the routine and failure-recovery
+workflow, and [State and Capture Formats](STATE_AND_CAPTURE_FORMATS.md) for the
+persisted evidence contract.
 
 ## Non-Goals
 

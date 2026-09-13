@@ -76,3 +76,16 @@ The correction withholds generic restart on exit 137 without positive OOM eviden
 it does not infer OOM from SIGKILL. All-eight integration now checks complete scoped
 incident history, not merely the eventual matching incident, so an earlier wrong
 classification or forbidden restart also fails qualification.
+
+Follow-up run 34715967546 exposed missing OOM metadata for the entire injection
+confirmation period, not merely a short delay. The runtime correctly withheld
+generic restart, and the lab reported INJECTION_FAILED. Its artifacts remain in
+artifacts/g4-oom-guard-failed and the failed-job log is
+artifacts/raw/g4-oom-guard-ci-failure.log. A supervised child-allocation fixture is
+now under qualification; OOM proof and expected policy have not been weakened.
+
+On 2026-09-13 the supervised fixture passed local focused OOM qualification
+(17.25s) and all eight scenarios plus the real operator workflow (9 cases,
+101.08s). Strict XML verification found no failures/errors/skips. Evidence:
+artifacts/raw/g5-supervised-full.xml. Unit result: 301 passed, 9 opt-in skipped.
+This does not substitute for the outstanding Linux qualification.
