@@ -33,6 +33,7 @@ def run_scenario(
     error = None
     policy_correct = False
     patron: ManagedPatron | None = None
+    phase = "setup"
 
     try:
         context.detector_config.validate_interval(context.patron_interval)
@@ -77,6 +78,7 @@ def run_scenario(
         )
         expected = getattr(scenario, "expected_failure", lambda: "scenario-specific failure")()
         context.narrate(f"expected failure: {expected}")
+        phase = "injection"
         injection = scenario.inject(context)
         post_state = context.docker.inspect(context.target_container)
         print_debug_state(context, "post-state", post_state)
@@ -85,6 +87,7 @@ def run_scenario(
             status = INJECTION_FAILED
             error = injection.error or "failure injection was not confirmed"
         else:
+            phase = "observation"
             context.narrate("Waiting for Patron response")
             observation = scenario.observe_outcome(context, injection)
             print_debug_state(context, "final-state", context.docker.inspect(context.target_container))
@@ -107,10 +110,10 @@ def run_scenario(
                 status = FAILED
                 error = observation.error
     except DockerError as exc:
-        status = SETUP_FAILED if not injection.injected else INJECTION_FAILED
+        status = SETUP_FAILED if phase == "setup" else INJECTION_FAILED if phase == "injection" else FAILED
         error = str(exc)
     except Exception as exc:
-        status = SETUP_FAILED if not injection.injected else FAILED
+        status = SETUP_FAILED if phase == "setup" else INJECTION_FAILED if phase == "injection" else FAILED
         error = str(exc)
     finally:
         if patron is not None:

@@ -89,9 +89,27 @@ def test_runner_cleans_up_after_exception() -> None:
         start_patron=False,
     )
 
-    run_scenario(scenario, context, writer=MemoryWriter())
+    result = run_scenario(scenario, context, writer=MemoryWriter())
 
     assert scenario.cleaned
+    assert result.status == INJECTION_FAILED and result.error == "boom"
+
+
+@pytest.mark.parametrize("phase,expected", [("setup", "SETUP_FAILED"), ("inject", "INJECTION_FAILED"),
+                                           ("observe", "FAILED")])
+def test_exceptions_keep_their_phase_and_primary_error(tmp_path, monkeypatch, phase, expected):
+    from unittest.mock import Mock
+    from scenarios.docker_utils import DockerError
+    monkeypatch.chdir(tmp_path)
+    scenario = FailingAfterSetupScenario()
+    scenario.inject = Mock(return_value=InjectionResult(True, True, "2026-09-13T00:00:00+00:00", None))
+    setattr(scenario, phase, Mock(side_effect=DockerError("primary failure")))
+    scenario.cleanup = Mock(side_effect=RuntimeError("cleanup failure"))
+    context = ScenarioContext("failing", "target", docker=FakeDocker(), start_patron=False)
+    result = run_scenario(scenario, context, writer=MemoryWriter())
+    assert result.status == expected
+    assert result.error == "primary failure; cleanup failed: cleanup failure"
+    scenario.cleanup.assert_called_once()
 
 
 def test_failure_state_evidence_is_persisted(tmp_path, monkeypatch):
